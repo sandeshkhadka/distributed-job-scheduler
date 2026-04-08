@@ -1,0 +1,24 @@
+BasedOnStyle: LLVM
+
+# Pointer / reference alignment
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# Braces on same line
+BreakBeforeBraces: Attach
+
+# Function / call argument wrapping
+BinPackArguments: false
+BinPackParameters: false
+AllowAllArgumentsOnNextLine: true
+
+# Line length (controls when wrapping happens)
+ColumnLimit: 100
+
+# Trailing commas (only applies in some contexts like initializer lists)
+Cpp11BracedListStyle: true
+
+# Keep things simple/minimal
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
