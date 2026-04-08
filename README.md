@@ -1,7 +1,7 @@
 ## Install Requirements
 
 ```bash
-sudo dnf install clang cmake
+sudo dnf install clang cmake clang-tools-extra
 ```
 
 ## Build Instructions
