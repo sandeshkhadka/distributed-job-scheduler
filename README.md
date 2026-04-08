@@ -8,9 +8,11 @@
 sudo dnf install clang cmake clang-tools-extra
 ```
 
-## Setup pre-commit hook
+## Setup 
 ```
-git config core.hooksPath .githooks
+git clone git@github.com:sandeshkhadka/distributed-job-scheduler.git
+cd distributed-job-scheduler
+git config core.hooksPath .githooks # from inside the project-root
 ```
 
 ## Build Instructions
