@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -e
+
+# Only staged C/C++ files
+files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$' || true)
+
+[ -z "$files" ] && exit 0
+
+for f in $files; do
+  clang-format -i --verbose "$f"
+  git add "$f"
+done

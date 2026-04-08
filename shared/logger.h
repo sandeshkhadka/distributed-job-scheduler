@@ -2,7 +2,6 @@
 #include <string>
 
 namespace DJS {
-
 class Logger {
   private:
     static void Log(const std::string& message) { std::cout << message << "\n"; }
@@ -12,5 +11,4 @@ class Logger {
     static void Error(const std::string& message) { Logger::Log("[ERROR]: " + message); }
     static void Info(const std::string& message) { Logger::Log("[INFO]: " + message); }
 };
-
 } // namespace DJS
