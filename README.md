@@ -4,11 +4,18 @@
 
 ## Install Requirements
 
+Fedora:
 ```bash
-sudo dnf install clang cmake clang-tools-extra
+sudo dnf install clang cmake clang-tools-extra 
+```
+
+Arch:
+```bash
+sudo pacman -S clang cmake clang-tools-extra llvm-libs
 ```
 
 ## Setup 
+
 ```
 git clone git@github.com:sandeshkhadka/distributed-job-scheduler.git
 cd distributed-job-scheduler
