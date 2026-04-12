@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package djs;
+
+message RegisterWorkerRequest {
+  string worker_id = 1;
+  string host = 2;
+  int32 port = 3;
+}
+
+message RegisterWorkerReply {
+  bool ok = 1;
+  string message = 2;
+}
+
+message SubmitJobRequest {
+  string job_id = 1;
+  string payload = 2;
+}
+
+message SubmitJobReply {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message GetJobStatusRequest {
+  string job_id = 1;
+}
+
+message GetJobStatusReply {
+  string status = 1;
+  string assigned_worker_id = 2;
+}
+
+service SchedulerService {
+  rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerReply);
+  rpc SubmitJob(SubmitJobRequest) returns (SubmitJobReply);
+  rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusReply);
+}

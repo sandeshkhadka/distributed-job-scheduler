@@ -7,6 +7,10 @@
 Fedora:
 ```bash
 sudo dnf install clang cmake clang-tools-extra 
+
+# setup grpc
+sudo dnf install grpc-devel grpc-plugins protobuf-devel protobuf-compiler
+
 ```
 
 Arch:
