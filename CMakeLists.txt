@@ -10,6 +10,46 @@ file(GLOB_RECURSE SHARED_SOURCES CONFIGURE_DEPENDS "shared/*.cpp")
 add_library(shared STATIC ${SHARED_SOURCES})
 target_include_directories(shared PUBLIC "${CMAKE_SOURCE_DIR}/shared")
 
+# GRPC and PROTOBUF stuff
+find_package(Protobuf REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
+
+set(PROTO_FILE ${CMAKE_SOURCE_DIR}/proto/scheduler.proto)
+set(GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${GENERATED_DIR})
+
+set(PROTO_SRCS ${GENERATED_DIR}/scheduler.pb.cc)
+set(PROTO_HDRS ${GENERATED_DIR}/scheduler.pb.h)
+set(GRPC_SRCS ${GENERATED_DIR}/scheduler.grpc.pb.cc)
+set(GRPC_HDRS ${GENERATED_DIR}/scheduler.grpc.pb.h)
+
+add_custom_command(
+  OUTPUT ${PROTO_SRCS} ${PROTO_HDRS}
+  COMMAND protobuf::protoc
+  ARGS --cpp_out=${GENERATED_DIR}
+       -I ${CMAKE_SOURCE_DIR}/proto
+       ${PROTO_FILE}
+  DEPENDS ${PROTO_FILE}
+)
+
+add_custom_command(
+  OUTPUT ${GRPC_SRCS} ${GRPC_HDRS}
+  COMMAND protobuf::protoc
+  ARGS --grpc_out=${GENERATED_DIR}
+       --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
+       -I ${CMAKE_SOURCE_DIR}/proto
+       ${PROTO_FILE}
+  DEPENDS ${PROTO_FILE}
+)
+
+add_library(djs_proto STATIC
+  ${PROTO_SRCS}
+  ${GRPC_SRCS}
+)
+
+target_include_directories(djs_proto PUBLIC ${GENERATED_DIR})
+target_link_libraries(djs_proto PUBLIC gRPC::grpc++ protobuf::libprotobuf)
+
 # helper macro to add target
 macro(add_component NAME)
   file(GLOB_RECURSE _SOURCES CONFIGURE_DEPENDS "${NAME}/*.cpp")
@@ -17,8 +57,11 @@ macro(add_component NAME)
   target_include_directories(${NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/${NAME}"
     "${CMAKE_SOURCE_DIR}/shared"
+    ${GENERATED_DIR}
   )
+  target_link_libraries(${NAME} PUBLIC shared djs_proto)
 endmacro()
+
 
 # Targets
 add_component(scheduler)
