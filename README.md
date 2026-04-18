@@ -16,6 +16,8 @@ sudo dnf install grpc-devel grpc-plugins protobuf-devel protobuf-compiler
 Arch:
 ```bash
 sudo pacman -S clang cmake clang-tools-extra llvm-libs
+
+sudo pacman -S grpc protobuf
 ```
 
 ## Setup 

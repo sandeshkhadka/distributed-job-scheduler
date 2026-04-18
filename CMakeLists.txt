@@ -11,7 +11,6 @@ add_library(shared STATIC ${SHARED_SOURCES})
 target_include_directories(shared PUBLIC "${CMAKE_SOURCE_DIR}/shared")
 
 # GRPC and PROTOBUF stuff
-find_package(Protobuf REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
 set(PROTO_FILE ${CMAKE_SOURCE_DIR}/proto/scheduler.proto)
