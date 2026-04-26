@@ -6,7 +6,8 @@
 
 Fedora:
 ```bash
-sudo dnf install clang cmake clang-tools-extra 
+sudo dnf install clang cmake clang-tools-extra sqlite sqlite-devel
+
 
 # setup grpc
 sudo dnf install grpc-devel grpc-plugins protobuf-devel protobuf-compiler

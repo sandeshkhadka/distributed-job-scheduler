@@ -7,11 +7,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(GLOB_RECURSE SHARED_SOURCES CONFIGURE_DEPENDS "shared/*.cpp")
 
-add_library(shared STATIC ${SHARED_SOURCES})
+# shared library
+find_package(SQLite3 REQUIRED)
+add_library(shared STATIC ${SHARED_SOURCES} )
 target_include_directories(shared PUBLIC "${CMAKE_SOURCE_DIR}/shared")
+target_link_libraries(shared PUBLIC SQLite3::SQLite3)
 
 # GRPC and PROTOBUF stuff
 find_package(gRPC CONFIG REQUIRED)
+
 
 set(PROTO_FILE ${CMAKE_SOURCE_DIR}/proto/scheduler.proto)
 set(GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
@@ -47,7 +51,7 @@ add_library(djs_proto STATIC
 )
 
 target_include_directories(djs_proto PUBLIC ${GENERATED_DIR})
-target_link_libraries(djs_proto PUBLIC gRPC::grpc++ protobuf::libprotobuf)
+target_link_libraries(djs_proto PUBLIC gRPC::grpc++ protobuf::libprotobuf )
 
 # helper macro to add target
 macro(add_component NAME)
@@ -58,7 +62,7 @@ macro(add_component NAME)
     "${CMAKE_SOURCE_DIR}/shared"
     ${GENERATED_DIR}
   )
-  target_link_libraries(${NAME} PUBLIC shared djs_proto)
+  target_link_libraries(${NAME} PUBLIC shared djs_proto )
 endmacro()
 
 
