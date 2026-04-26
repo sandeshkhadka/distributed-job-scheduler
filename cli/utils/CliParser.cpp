@@ -7,31 +7,33 @@
 #include <vector>
 
 CliParser::CliParser(int argc, char* argv[]) : _dist_cli("dist_cli") {
+    _logger = DJS::Logger();
     this->_actions.push_back("submit");
-    argparse::ArgumentParser submit("submit");
-    submit.add_description("Submit a job to the scheduler");
-    submit.add_argument("job");
+    _submit_cmd.add_description("Submit a job to the scheduler");
+    // submit.add_argument("job");
     // presence of this flag indicates that we're being given a job file
-    submit.add_argument("--type, -t").required().default_value("build_docker_image").help("");
+    _submit_cmd.add_argument("--type, -t").required().default_value("build_docker_image").help("");
+    _submit_cmd.add_argument("--payload", "-p")
+        .required()
+        .help("Just a simple unix command for now");
 
     this->_actions.push_back("query");
-    argparse::ArgumentParser query("query");
-    query.add_description("Query the status of a job with given JOB_ID");
-    query.add_argument("job_id").help("Job id of the job to get the status of").scan<'i', int>();
+    _query_cmd.add_description("Query the status of a job with given JOB_ID");
+    _query_cmd.add_argument("job_id")
+        .help("Job id of the job to get the status of")
+        .scan<'i', int>();
 
     this->_actions.push_back("cancel");
-    argparse::ArgumentParser cancel("cancel");
-    cancel.add_description("cancel the status of a job with given JOB_ID");
-    cancel.add_argument("job_id").help("Job id of the job to cancel").scan<'i', int>();
+    _cancel_cmd.add_description("cancel the status of a job with given JOB_ID");
+    _cancel_cmd.add_argument("job_id").help("Job id of the job to cancel").scan<'i', int>();
 
     this->_actions.push_back("list");
-    argparse::ArgumentParser list("list");
-    list.add_description("List the jobs");
+    _list_cmd.add_description("List the jobs");
 
-    this->_dist_cli.add_subparser(submit);
-    this->_dist_cli.add_subparser(query);
-    this->_dist_cli.add_subparser(cancel);
-    this->_dist_cli.add_subparser(list);
+    this->_dist_cli.add_subparser(_submit_cmd);
+    this->_dist_cli.add_subparser(_query_cmd);
+    this->_dist_cli.add_subparser(_cancel_cmd);
+    this->_dist_cli.add_subparser(_list_cmd);
 
     try {
         this->_dist_cli.parse_args(argc, argv);
@@ -54,5 +56,18 @@ std::string CliParser::get_action() {
 }
 
 std::vector<std::string> CliParser::get_possible_actions() { return _actions; }
+
+std::string CliParser::get_value(const std::string& flag) {
+    std::string value;
+    try {
+        if (_dist_cli.is_subcommand_used(_submit_cmd)) {
+            return _submit_cmd.get(flag);
+        }
+    } catch (std::exception& e) {
+        _logger.Error("Invalid value for flag: " + flag + "Error: " + e.what());
+        value = "";
+    }
+    return value;
+}
 
 void CliParser::print_help() { std::cout << _dist_cli; }

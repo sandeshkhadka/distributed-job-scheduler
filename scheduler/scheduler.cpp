@@ -8,14 +8,12 @@ using Logger = DJS::Logger;
 int main() {
     SchedulerServiceImpl service;
 
-    SchedulerDatabase db;
-    // db.insert_job("Test job payload");
-
     grpc::ServerBuilder builder;
     builder.AddListeningPort("0.0.0.0:50051", grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
 
     std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    Logger::Info("Server started on port 50051");
     server->Wait();
     return 0;
 }

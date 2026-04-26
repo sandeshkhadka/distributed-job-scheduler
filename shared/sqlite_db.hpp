@@ -1,4 +1,4 @@
-#include <functional>
+#pragma once
 #include <mutex>
 #include <sqlite3.h>
 #include <stdexcept>
@@ -28,6 +28,7 @@ class SqliteDatabase {
         }
         return *_instance;
     }
+    sqlite3_int64 last_insert_rowid();
 
   private:
     SqliteDatabase(const std::string& db_path);

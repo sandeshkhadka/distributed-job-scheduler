@@ -1,4 +1,5 @@
 #include "sqlite_db.hpp"
+#include <sqlite3.h>
 
 void SqliteDatabase::execute(const std::string& query) {
     return SqliteDatabase::execute(query, nullptr, nullptr);
@@ -22,6 +23,7 @@ SqliteDatabase::SqliteDatabase(const std::string& db_path) {
     sqlite3_busy_timeout(_db, 5000);
     execute("PRAGMA journal_mode=WAL;", nullptr);
 }
+sqlite3_int64 SqliteDatabase::last_insert_rowid() { return sqlite3_last_insert_rowid(_db); }
 
 SqliteDatabase::~SqliteDatabase() { sqlite3_close(_db); }
 

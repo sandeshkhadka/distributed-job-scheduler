@@ -3,14 +3,18 @@ syntax = "proto3";
 package djs;
 
 message RegisterWorkerRequest {
-  string worker_id = 1;
-  string host = 2;
-  int32 port = 3;
+  int32 cpu_cores = 1;
+  float mem_size = 2;
+  float disk_size = 3;
+  float cpu_freq = 4;
+  string os = 5;
+  string name = 6;
 }
 
 message RegisterWorkerReply {
   bool ok = 1;
   string message = 2;
+  int32 worker_id = 3;
 }
 
 message SubmitJobRequest {
@@ -33,11 +37,11 @@ message GetJobStatusReply {
 }
 
 message GetJobRequest {
-  string worker_id = 1;
+  int32 worker_id = 1;
 }
 
 message GetJobResponse {
-  string job_id = 1;
+  int32 job_id = 1;
   string payload = 2;
 }
 
