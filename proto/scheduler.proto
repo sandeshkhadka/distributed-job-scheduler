@@ -32,8 +32,18 @@ message GetJobStatusReply {
   string assigned_worker_id = 2;
 }
 
+message GetJobRequest {
+  string worker_id = 1;
+}
+
+message GetJobResponse {
+  string job_id = 1;
+  string payload = 2;
+}
+
 service SchedulerService {
   rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerReply);
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobReply);
   rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusReply);
+  rpc GetJob(GetJobRequest) returns (GetJobResponse);
 }
