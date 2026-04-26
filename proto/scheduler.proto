@@ -14,13 +14,13 @@ message RegisterWorkerReply {
 }
 
 message SubmitJobRequest {
-  string job_id = 1;
   string payload = 2;
 }
 
 message SubmitJobReply {
-  bool accepted = 1;
-  string message = 2;
+  string job_id = 1;
+  bool accepted = 2;
+  string message = 3;
 }
 
 message GetJobStatusRequest {
