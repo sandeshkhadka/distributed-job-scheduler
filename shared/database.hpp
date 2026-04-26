@@ -1,3 +1,4 @@
+#include <functional>
 #include <mutex>
 #include <sqlite3.h>
 #include <stdexcept>
@@ -11,6 +12,7 @@ class Database {
     std::string _db_name;
 
   public:
+    void execute(const std::string& query, int (*callback)(void*, int, char**, char**), void*);
     void execute(const std::string& query);
 
     static void init(const std::string& db_path) {
