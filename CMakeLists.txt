@@ -11,9 +11,16 @@ file(GLOB_RECURSE SHARED_SOURCES CONFIGURE_DEPENDS "shared/*.cpp")
 find_package(SQLite3 REQUIRED)
 add_library(shared STATIC ${SHARED_SOURCES} )
 target_include_directories(shared PUBLIC "${CMAKE_SOURCE_DIR}/shared")
+
+# for older cmake version where SQLite::SQLite3 is the target package
+if(TARGET SQLite::SQLite3 AND NOT TARGET SQLite3::SQLite3)
+    add_library(SQLite3::SQLite3 ALIAS SQLite::SQLite3)
+endif()
+
 target_link_libraries(shared PUBLIC SQLite3::SQLite3)
 
 # GRPC and PROTOBUF stuff
+find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
 
