@@ -1,5 +1,6 @@
 #pragma once
 
+#include "database.h"
 #include "logger.h"
 #include "scheduler.grpc.pb.h"
 #include <grpcpp/grpcpp.h>
@@ -13,5 +14,7 @@ class WorkerClient {
   public:
     explicit WorkerClient(std::shared_ptr<grpc::Channel> channel);
 
-    void Register(const std::string& worker_id, const std::string& host, int port);
+    int Register();
+
+    void GetJob();
 };

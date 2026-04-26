@@ -15,13 +15,10 @@ int main() {
     // 2. Initialize the client
     WorkerClient client(channel);
 
-    // 3. Register this worker with the scheduler
-    // In a real system, you might generate a UUID and use the machine's actual IP
-    std::string worker_id = "worker-node-1";
-    std::string host = "127.0.0.1";
     int port = 50052; // Port where this worker will eventually listen for jobs
 
-    client.Register(worker_id, host, port);
+    // client.Register();
+    client.GetJob();
 
     // Keep the worker alive (optional for now, but needed later when worker acts as a server)
     // while (true) { std::this_thread::sleep_for(std::chrono::seconds(1)); }

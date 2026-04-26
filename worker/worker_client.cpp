@@ -1,26 +1,48 @@
 #include "worker_client.hpp"
+#include <system_error>
 
 WorkerClient::WorkerClient(std::shared_ptr<grpc::Channel> channel)
     : stub_(djs::SchedulerService::NewStub(channel)) {}
 
-void WorkerClient::Register(const std::string& worker_id, const std::string& host, int port) {
+int WorkerClient::Register() {
     djs::RegisterWorkerRequest request;
-    request.set_worker_id(worker_id);
-    request.set_host(host);
-    request.set_port(port);
-
+    request.set_cpu_cores(5);
+    request.set_mem_size(16);
+    request.set_disk_size(500);
+    request.set_name("UniqueName");
+    request.set_cpu_freq(3.5);
+    request.set_os("Linux");
     djs::RegisterWorkerReply reply;
     grpc::ClientContext context;
 
     // Perform the RPC call
     grpc::Status status = stub_->RegisterWorker(&context, request, &reply);
-
+    int worker_id{0};
     if (status.ok()) {
         if (reply.ok()) {
-            Logger::Info("Registration successful: " + reply.message());
+            worker_id = reply.worker_id();
+            Logger::Info("Registration successful: Id: " + std::to_string(worker_id));
         } else {
             Logger::Info("Registration rejected: " + reply.message());
         }
+    } else {
+        Logger::Info("RPC failed: " + status.error_message());
+    }
+    return worker_id;
+}
+
+void WorkerClient::GetJob() {
+    djs::GetJobRequest request;
+    djs::GetJobResponse reply;
+    grpc::ClientContext context;
+
+    request.set_worker_id(1);
+    // Perform the RPC call
+    grpc::Status status = stub_->GetJob(&context, request, &reply);
+    if (status.ok()) {
+        std::cout << "Job ID: " << reply.job_id() << std::endl;
+        std::cout << "Payload: " << reply.payload() << std::endl;
+        std::system(reply.payload().c_str());
     } else {
         Logger::Info("RPC failed: " + status.error_message());
     }

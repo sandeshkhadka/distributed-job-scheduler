@@ -20,7 +20,6 @@ endif()
 target_link_libraries(shared PUBLIC SQLite3::SQLite3)
 
 # GRPC and PROTOBUF stuff
-find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
 
