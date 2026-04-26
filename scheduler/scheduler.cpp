@@ -8,7 +8,7 @@ using Logger = DJS::Logger;
 int main() {
     SchedulerServiceImpl service;
 
-    // SchedulerDatabase db;
+    SchedulerDatabase db;
     // db.insert_job("Test job payload");
 
     grpc::ServerBuilder builder;

@@ -3,10 +3,10 @@
 #include <sqlite3.h>
 #include <stdexcept>
 #include <string>
-class Database {
+class SqliteDatabase {
   private:
     static std::mutex _init_mutex;
-    static Database* _instance;
+    static SqliteDatabase* _instance;
     sqlite3* _db;
     std::mutex _mutex;
     std::string _db_name;
@@ -20,9 +20,9 @@ class Database {
         if (_instance) {
             throw std::runtime_error("Database already initalized");
         }
-        _instance = new Database(db_path);
+        _instance = new SqliteDatabase(db_path);
     }
-    static Database& instance() {
+    static SqliteDatabase& instance() {
         if (!_instance) {
             throw new std::runtime_error("Database not initalized");
         }
@@ -30,6 +30,6 @@ class Database {
     }
 
   private:
-    Database(const std::string& db_path);
-    ~Database();
+    SqliteDatabase(const std::string& db_path);
+    ~SqliteDatabase();
 };

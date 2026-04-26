@@ -1,14 +1,10 @@
-#include <string>
+#include "database.h"
 
-struct Job {
-    int id;
-    std::string payload;
-};
-class SchedulerDatabase {
+class SchedulerDatabase : public Database {
   public:
     SchedulerDatabase();
 
-    void insert_job(const std::string& payload);
+    // void insert_job(const std::string& payload);
 
-    Job get_jobs_by_id(int id);
+    // Job get_jobs_by_id(int id);
 };
