@@ -24,5 +24,5 @@ int main(int argc, char* argv[]) {
     SchedulerClient client(
         grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
 
-    client.SubmitJob("job123", "payload");
+    client.SubmitJob("payload");
 }

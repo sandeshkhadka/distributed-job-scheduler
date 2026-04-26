@@ -13,5 +13,5 @@ class SchedulerClient {
   public:
     explicit SchedulerClient(std::shared_ptr<grpc::Channel> channel);
 
-    void SubmitJob(const std::string& job_id, const std::string& payload);
+    void SubmitJob(const std::string& payload);
 };
