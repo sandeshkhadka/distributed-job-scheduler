@@ -1,15 +1,28 @@
 #include "worker_client.hpp"
-#include <system_error>
 
 WorkerClient::WorkerClient(std::shared_ptr<grpc::Channel> channel)
     : stub_(djs::SchedulerService::NewStub(channel)) {}
 
 int WorkerClient::Register() {
+    // worker is already registered
+    if (this->worker_id != -1) {
+        return this->worker_id;
+    }
+
+    if (int registered_worker_id = db.get_registered_worker_id(); registered_worker_id != -1) {
+        Logger::Info("Registration: Worker already registered.");
+        this->worker_id = registered_worker_id;
+        return registered_worker_id;
+    }
+
+    Logger::Info("Registration: Worker not registered. Registering worker...");
     djs::RegisterWorkerRequest request;
+    const std::string WORKER_NAME = "UniqueName";
+
     request.set_cpu_cores(5);
     request.set_mem_size(16);
     request.set_disk_size(500);
-    request.set_name("UniqueName");
+    request.set_name(WORKER_NAME);
     request.set_cpu_freq(3.5);
     request.set_os("Linux");
     djs::RegisterWorkerReply reply;
@@ -21,9 +34,11 @@ int WorkerClient::Register() {
     if (status.ok()) {
         if (reply.ok()) {
             this->worker_id = reply.worker_id();
-            Logger::Info("Registration successful: Id: " + std::to_string(worker_id));
+            db.insert_worker(Worker{this->worker_id, WORKER_NAME});
+
+            Logger::Info("Registration: successful: Id: " + std::to_string(worker_id));
         } else {
-            Logger::Info("Registration rejected: " + reply.message());
+            Logger::Info("Registration: rejected: " + reply.message());
         }
     } else {
         Logger::Info("RPC failed: " + status.error_message());
