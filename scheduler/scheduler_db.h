@@ -18,6 +18,12 @@ struct WorkerJob {
     int job_id;
 };
 
+struct Client {
+    int id;
+    std::string name; // hostname
+    std::string status;
+};
+
 int insert_worker_cb(void* data, int argc, char** argv, char** col_name);
 int get_worker_cb(void* data, int argc, char** argv, char** col_name);
 
@@ -37,4 +43,6 @@ class SchedulerDatabase : public Database {
     void insert_worker_job(const WorkerJob& worker_job);
     std::vector<Job> get_worker_jobs(int worker_id);
     Worker get_job_worker(int job_id);
+
+    int insert_client(const Client& client);
 };

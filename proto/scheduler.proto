@@ -45,9 +45,20 @@ message GetJobResponse {
   string payload = 2;
 }
 
+message RegisterClientRequest {
+  string hostname = 1;
+}
+
+message RegisterClientResponse {
+  int32 client_id = 1;
+  bool ok = 2;
+  string message = 3;
+}
+
 service SchedulerService {
   rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerReply);
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobReply);
   rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusReply);
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
+  rpc RegisterClient(RegisterClientRequest) returns (RegisterClientResponse);
 }

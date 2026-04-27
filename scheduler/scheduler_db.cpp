@@ -5,10 +5,11 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
     // create client table
     std::string create_client_table = "CREATE TABLE IF NOT EXISTS clients ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                                      "name TEXT NOT NULL, "
+                                      "name TEXT NOT NULL, " // hostname
                                       "status TEXT NOT NULL"
                                       ");";
     SqliteDatabase::instance().execute(create_client_table);
+
     // create workter table
     std::string create_worker_table = "CREATE TABLE IF NOT EXISTS workers ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -21,6 +22,7 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
                                       "status TEXT NOT NULL"
                                       ");";
     SqliteDatabase::instance().execute(create_worker_table);
+
     // create job worker join table
     std::string create_job_worker_table = "CREATE TABLE IF NOT EXISTS job_worker ("
                                           "job_id INTEGER NOT NULL, "
@@ -94,4 +96,14 @@ int get_worker_cb(void* data, int argc, char** argv, char** col_name) {
     worker.status = argv[7];
     workers->push_back(worker);
     return 0;
+}
+
+int SchedulerDatabase::insert_client(const Client& client) {
+    std::string query =
+        "INSERT INTO clients (name, status) VALUES (" + client.name + ", " + client.status + ")";
+
+    int id;
+    SqliteDatabase::instance().execute(query);
+    id = SqliteDatabase::instance().last_insert_rowid();
+    return id;
 }
