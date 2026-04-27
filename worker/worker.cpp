@@ -1,7 +1,9 @@
 #include "worker_client.hpp"
+#include <chrono>
 #include <grpcpp/grpcpp.h>
 #include <memory>
 #include <string>
+#include <thread>
 
 using Logger = DJS::Logger;
 
@@ -17,8 +19,13 @@ int main() {
 
     int port = 50052; // Port where this worker will eventually listen for jobs
 
-    // client.Register();
-    client.GetJob();
+    client.Register();
+
+    // ask for jobs every 2 seconds until you get the job
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        client.GetJob();
+    }
 
     // Keep the worker alive (optional for now, but needed later when worker acts as a server)
     // while (true) { std::this_thread::sleep_for(std::chrono::seconds(1)); }
