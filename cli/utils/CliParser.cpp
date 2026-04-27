@@ -17,6 +17,9 @@ CliParser::CliParser(int argc, char* argv[]) : _dist_cli("dist_cli") {
         .required()
         .help("Just a simple unix command for now");
 
+    this->_actions.push_back("register");
+    _register_cmd.add_description("Register the client to the scheduler");
+
     this->_actions.push_back("query");
     _query_cmd.add_description("Query the status of a job with given JOB_ID");
     _query_cmd.add_argument("job_id")
@@ -31,6 +34,7 @@ CliParser::CliParser(int argc, char* argv[]) : _dist_cli("dist_cli") {
     _list_cmd.add_description("List the jobs");
 
     this->_dist_cli.add_subparser(_submit_cmd);
+    this->_dist_cli.add_subparser(_register_cmd);
     this->_dist_cli.add_subparser(_query_cmd);
     this->_dist_cli.add_subparser(_cancel_cmd);
     this->_dist_cli.add_subparser(_list_cmd);

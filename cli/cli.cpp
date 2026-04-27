@@ -23,4 +23,11 @@ int main(int argc, char* argv[]) {
         std::string payload = cli_parser.get_value("--payload");
         client.SubmitJob(payload);
     }
+
+    if (action == "register") {
+        std::cout << "Registering...\n";
+        SchedulerClient client(
+            grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
+        client.RegisterClient("localhost");
+    }
 }

@@ -99,8 +99,8 @@ int get_worker_cb(void* data, int argc, char** argv, char** col_name) {
 }
 
 int SchedulerDatabase::insert_client(const Client& client) {
-    std::string query =
-        "INSERT INTO clients (name, status) VALUES (" + client.name + ", " + client.status + ")";
+    std::string query = "INSERT INTO clients (name, status) VALUES ('" + client.name + "', '" +
+                        client.status + "')";
 
     int id;
     SqliteDatabase::instance().execute(query);

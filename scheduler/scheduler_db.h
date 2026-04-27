@@ -19,7 +19,7 @@ struct WorkerJob {
 };
 
 struct Client {
-    int id;
+    // int id;
     std::string name; // hostname
     std::string status;
 };

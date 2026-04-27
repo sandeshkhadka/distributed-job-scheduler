@@ -18,6 +18,7 @@ message RegisterWorkerReply {
 }
 
 message SubmitJobRequest {
+  int32 client_id = 1;
   string payload = 2;
 }
 
