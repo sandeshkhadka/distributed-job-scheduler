@@ -17,10 +17,10 @@ int WorkerClient::Register() {
 
     // Perform the RPC call
     grpc::Status status = stub_->RegisterWorker(&context, request, &reply);
-    int worker_id{0};
+    // int worker_id{0};
     if (status.ok()) {
         if (reply.ok()) {
-            worker_id = reply.worker_id();
+            this->worker_id = reply.worker_id();
             Logger::Info("Registration successful: Id: " + std::to_string(worker_id));
         } else {
             Logger::Info("Registration rejected: " + reply.message());
@@ -36,7 +36,12 @@ void WorkerClient::GetJob() {
     djs::GetJobResponse reply;
     grpc::ClientContext context;
 
-    request.set_worker_id(1);
+    if (this->worker_id == -1) {
+        Logger::Error("This worker is not registered. Register before running jobs!");
+        exit(0);
+    }
+
+    request.set_worker_id(this->worker_id);
     // Perform the RPC call
     grpc::Status status = stub_->GetJob(&context, request, &reply);
     if (status.ok()) {

@@ -10,6 +10,7 @@ using Logger = DJS::Logger;
 class WorkerClient {
   private:
     std::unique_ptr<djs::SchedulerService::Stub> stub_;
+    int worker_id{-1};
 
   public:
     explicit WorkerClient(std::shared_ptr<grpc::Channel> channel);
