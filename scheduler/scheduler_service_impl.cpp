@@ -1,5 +1,6 @@
 #include "scheduler_service_impl.h"
 #include "logger.h"
+#include "scheduler_db.h"
 #include <grpcpp/support/status.h>
 #include <iostream>
 
@@ -11,8 +12,7 @@ grpc::Status SchedulerServiceImpl::SubmitJob(grpc::ServerContext* context,
 
     const std::string& payload = request->payload();
 
-    // Get the client ID from request, add a mehcanishm to register the client as well;
-    int client_id = 1;
+    int client_id = request->client_id();
 
     Logger::Info("SubmitJob: payload=" + payload);
     int id = db.insert_job(payload, client_id);
@@ -82,6 +82,23 @@ grpc::Status SchedulerServiceImpl::GetJob(grpc::ServerContext* context,
 
     reply->set_job_id(selected_job.id);
     reply->set_payload(selected_job.payload);
+    return grpc::Status::OK;
+}
+
+// returns the client id
+grpc::Status SchedulerServiceImpl::RegisterClient(grpc::ServerContext* context,
+                                                  const djs::RegisterClientRequest* request,
+                                                  djs::RegisterClientResponse* response) {
+    Client client;
+    client.name = request->hostname();
+    client.status = "active";
+    int client_id = db.insert_client(client);
+
+    std::cout << "Client Registered: [" << client_id << "]\n";
+
+    response->set_ok(true);
+    response->set_message("Client successfully registered");
+    response->set_client_id(client_id);
     return grpc::Status::OK;
 }
 

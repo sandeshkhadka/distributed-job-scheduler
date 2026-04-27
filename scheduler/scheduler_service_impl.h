@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scheduler.grpc.pb.h"
+#include "scheduler.pb.h"
 #include "scheduler_db.h"
 #include <grpcpp/support/status.h>
 #include <string>
@@ -25,6 +26,10 @@ class SchedulerServiceImpl final : public djs::SchedulerService::Service {
     grpc::Status GetJob(grpc::ServerContext* context,
                         const djs::GetJobRequest* request,
                         djs::GetJobResponse* reply) override;
+
+    grpc::Status RegisterClient(grpc::ServerContext* context,
+                                const djs::RegisterClientRequest* request,
+                                djs::RegisterClientResponse* response) override;
 
   private:
     // The main function to select a job for a worker
