@@ -17,8 +17,8 @@ struct Worker {
     float mem_size;
     float disk_size;
     float cpu_freq;
-
     std::string os;
+    std::string kernel_version;
     std::string name;
     std::string status;
 };

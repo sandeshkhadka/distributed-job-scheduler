@@ -33,6 +33,7 @@ Database::Database(const std::string& db_name) {
                                       "disk_size REAL NOT NULL, "
                                       "cpu_freq REAL NOT NULL, "
                                       "os TEXT NOT NULL, "
+                                      "kernel_version TEXT NOT NULL, "
                                       "name TEXT NOT NULL, "
                                       "status TEXT NOT NULL"
                                       ");";
@@ -109,12 +110,13 @@ void Database::insert_worker_job(const WorkerJob& worker_job) {
 }
 
 int Database::insert_worker(const Worker& worker) {
-    std::string query = "INSERT INTO workers (cpu_cores, mem_size, disk_size, cpu_freq, os, name, "
-                        "status) VALUES (" +
-                        std::to_string(worker.cpu_cores) + ", " + std::to_string(worker.mem_size) +
-                        ", " + std::to_string(worker.disk_size) + ", " +
-                        std::to_string(worker.cpu_freq) + ", " + "'" + worker.os + "', " + "'" +
-                        worker.name + "', " + "'" + worker.status + "'" + ");";
+    std::string query =
+        "INSERT INTO workers (cpu_cores, mem_size, disk_size, cpu_freq, os, kernel_version, name, "
+        "status) VALUES (" +
+        std::to_string(worker.cpu_cores) + ", " + std::to_string(worker.mem_size) + ", " +
+        std::to_string(worker.disk_size) + ", " + std::to_string(worker.cpu_freq) + ", " + "'" +
+        worker.os + "', " + "'" + worker.kernel_version + "', " + "'" + worker.name + "', " + "'" +
+        worker.status + "'" + ");";
     int id;
     SqliteDatabase::instance().execute(query);
     id = SqliteDatabase::instance().last_insert_rowid();
@@ -153,8 +155,9 @@ int get_worker_cb(void* data, int argc, char** argv, char** col_name) {
     worker.disk_size = atoi(argv[3]);
     worker.cpu_freq = atoi(argv[4]);
     worker.os = argv[5];
-    worker.name = argv[6];
-    worker.status = argv[7];
+    worker.kernel_version = argv[6];
+    worker.name = argv[7];
+    worker.status = argv[8];
     workers->push_back(worker);
     return 0;
 }
