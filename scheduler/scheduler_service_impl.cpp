@@ -36,12 +36,14 @@ grpc::Status SchedulerServiceImpl::SubmitJob(grpc::ServerContext* context,
 grpc::Status SchedulerServiceImpl::RegisterWorker(grpc::ServerContext* context,
                                                   const djs::RegisterWorkerRequest* request,
                                                   djs::RegisterWorkerReply* reply) {
+
     Worker worker;
     worker.cpu_cores = request->cpu_cores();
     worker.mem_size = request->mem_size();
     worker.disk_size = request->disk_size();
     worker.cpu_freq = request->cpu_freq();
     worker.os = request->os();
+    worker.kernel_version = request->kernel_version();
     worker.name = request->name();
 
     int worker_id = db.insert_worker(worker);

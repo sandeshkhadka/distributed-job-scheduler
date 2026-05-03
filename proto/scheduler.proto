@@ -8,7 +8,8 @@ message RegisterWorkerRequest {
   float disk_size = 3;
   float cpu_freq = 4;
   string os = 5;
-  string name = 6;
+  string kernel_version = 6;
+  string name = 7;
 }
 
 message RegisterWorkerReply {
