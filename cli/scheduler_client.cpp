@@ -36,6 +36,7 @@ void SchedulerClient::RegisterClient(const std::string& hostname) {
 
     djs::RegisterClientRequest request;
     request.set_hostname(hostname);
+    const std::string CLIENT_STATUS = "registered";
 
     djs::RegisterClientResponse reply;
     grpc::ClientContext context;
@@ -44,7 +45,7 @@ void SchedulerClient::RegisterClient(const std::string& hostname) {
 
     if (status.ok()) {
         if (reply.ok()) {
-            db.insert_client(hostname, reply.client_id());
+            db.insert_client(Client{reply.client_id(), hostname, CLIENT_STATUS});
             std::cout << "message: " << reply.message() << "\n";
             std::cout << "client_id: " << reply.client_id() << "\n";
         } else {
