@@ -17,14 +17,21 @@ int WorkerClient::Register() {
 
     Logger::Info("Registration: Worker not registered. Registering worker...");
     djs::RegisterWorkerRequest request;
-    const std::string WORKER_NAME = "UniqueName";
 
-    request.set_cpu_cores(5);
-    request.set_mem_size(16);
-    request.set_disk_size(500);
+    const int CPU_CORES = 5;
+    const float MEM_SIZE = 5;
+    const float DISK_SIZE = 500;
+    const float CPU_FREQ = 3.5;
+    const std::string OS = "Linux";
+    const std::string WORKER_NAME = "UniqueName";
+    const std::string STATUS = "not running";
+
+    request.set_cpu_cores(CPU_CORES);
+    request.set_mem_size(MEM_SIZE);
+    request.set_disk_size(DISK_SIZE);
     request.set_name(WORKER_NAME);
-    request.set_cpu_freq(3.5);
-    request.set_os("Linux");
+    request.set_cpu_freq(CPU_FREQ);
+    request.set_os(OS);
     djs::RegisterWorkerReply reply;
     grpc::ClientContext context;
 
@@ -34,7 +41,14 @@ int WorkerClient::Register() {
     if (status.ok()) {
         if (reply.ok()) {
             this->worker_id = reply.worker_id();
-            db.insert_worker(Worker{this->worker_id, WORKER_NAME});
+            db.insert_worker(Worker{this->worker_id,
+                                    CPU_CORES,
+                                    MEM_SIZE,
+                                    DISK_SIZE,
+                                    CPU_FREQ,
+                                    OS,
+                                    WORKER_NAME,
+                                    STATUS});
 
             Logger::Info("Registration: successful: Id: " + std::to_string(worker_id));
         } else {
