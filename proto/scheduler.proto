@@ -45,6 +45,7 @@ message GetJobRequest {
 message GetJobResponse {
   int32 job_id = 1;
   string payload = 2;
+  int32 client_id = 3;
 }
 
 message RegisterClientRequest {

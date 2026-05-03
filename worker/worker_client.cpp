@@ -75,6 +75,8 @@ std::string get_hostname() {
     return "UnknownWorker";
 }
 } // namespace SystemInfo
+#include <cstdlib>
+#include <string>
 
 WorkerClient::WorkerClient(std::shared_ptr<grpc::Channel> channel)
     : stub_(djs::SchedulerService::NewStub(channel)) {}
@@ -144,10 +146,41 @@ void WorkerClient::GetJob() {
     // Perform the RPC call
     grpc::Status status = stub_->GetJob(&context, request, &reply);
     if (status.ok()) {
-        std::cout << "Job ID: " << reply.job_id() << std::endl;
-        std::cout << "Payload: " << reply.payload() << std::endl;
-        std::system(reply.payload().c_str());
+        const int job_id = reply.job_id();
+        const std::string payload = reply.payload();
+        const std::string status = "not started";
+        const int client_id = reply.client_id();
+
+        // TODO: check the job_id if it already exists before
+        // inserting
+        // Otherwise, the driver will scream
+
+        db.insert_job(
+            Job{.id = job_id, .payload = payload, .status = status, .client_id = client_id});
+
+        Logger::Info("Job inserted into the db");
+        std::cout << "Job ID: " << job_id << std::endl;
+        std::cout << "Payload: " << payload << std::endl;
     } else {
         Logger::Info("RPC failed: " + status.error_message());
     }
+}
+
+int WorkerClient::execute_job() {
+    std::vector<Job> jobs = db.get_jobs_by_status("not started");
+    if (jobs.size() == 0) {
+        Logger::Info("No jobs found");
+        return 1;
+    }
+
+    Job selected_job = jobs[0];
+    std::system(selected_job.payload.c_str());
+
+    // TODO:
+    // 1. change the status of the job here
+    // 2. store the job result in the db, and
+    // 3. send the result to scheduler.
+    // Otherwise, shit will go down
+
+    return 0;
 }

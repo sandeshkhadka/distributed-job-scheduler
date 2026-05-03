@@ -25,6 +25,7 @@ int main() {
     while (true) {
         std::this_thread::sleep_for(std::chrono::seconds(2));
         client.GetJob();
+        const int status = client.execute_job(); // idk what to do with the status
     }
 
     // Keep the worker alive (optional for now, but needed later when worker acts as a server)

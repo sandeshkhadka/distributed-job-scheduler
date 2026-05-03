@@ -6,4 +6,5 @@ class WorkerDatabase : public Database {
     WorkerDatabase();
 
     int insert_worker(const Worker& worker) override;
+    int insert_job(const Job& job) override;
 };

@@ -17,6 +17,7 @@ class WorkerClient {
     explicit WorkerClient(std::shared_ptr<grpc::Channel> channel);
 
     int Register();
-
     void GetJob();
+    int execute_job(); // returns the status of executed job
+                       // TODO: return the actual result
 };

@@ -4,9 +4,9 @@
 
 struct Job {
     int id;
-    int client_id;
     std::string payload;
     std::string status;
+    int client_id;
     std::string created_at;
     std::string updated_at;
 };
@@ -46,7 +46,7 @@ class Database {
     Database(const std::string& db_name);
 
     // job
-    int insert_job(const std::string& payload, int client_id);
+    virtual int insert_job(const Job& job);
     Job get_job_by_id(int job_id);
     std::vector<Job> get_job_by_client_id(int client_id);
     std::vector<Job> get_all_jobs();

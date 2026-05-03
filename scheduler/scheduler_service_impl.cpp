@@ -1,4 +1,5 @@
 #include "scheduler_service_impl.h"
+#include "database.h"
 #include "logger.h"
 #include "scheduler_db.h"
 #include <grpcpp/support/status.h>
@@ -14,14 +15,15 @@ grpc::Status SchedulerServiceImpl::SubmitJob(grpc::ServerContext* context,
 
     int client_id = request->client_id();
 
-    Logger::Info("SubmitJob: payload=" + payload);
-    int id = db.insert_job(payload, client_id);
+    Logger::Info("SubmitJob: payload = " + payload);
+    int id =
+        db.insert_job(Job{.payload = payload, .status = "not started", .client_id = client_id});
     if (id > 0) {
         std::string job_id = std::to_string(id);
         reply->set_accepted(true);
         reply->set_message("job accepted");
         reply->set_job_id(job_id);
-        Logger::Info("Job created: job_id=" + job_id);
+        Logger::Info("Job created: job_id = " + job_id);
         return grpc::Status::OK;
     }
 
@@ -84,6 +86,7 @@ grpc::Status SchedulerServiceImpl::GetJob(grpc::ServerContext* context,
 
     reply->set_job_id(selected_job.id);
     reply->set_payload(selected_job.payload);
+    reply->set_client_id(selected_job.client_id);
     return grpc::Status::OK;
 }
 

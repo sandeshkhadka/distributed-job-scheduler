@@ -50,9 +50,9 @@ Database::Database(const std::string& db_name) {
     SqliteDatabase::instance().execute(create_job_worker_table);
 }
 
-int Database::insert_job(const std::string& payload, int client_id) {
-    std::string query = "INSERT INTO jobs (payload, client_id) VALUES (\"" + payload + "\", " +
-                        std::to_string(client_id) + ")";
+int Database::insert_job(const Job& job) {
+    std::string query = "INSERT INTO jobs (payload, status, client_id) VALUES (\"" + job.payload +
+                        "\", \"" + job.status + "\", " + std::to_string(job.client_id) + ")";
     int id;
     SqliteDatabase::instance().execute(query);
     id = SqliteDatabase::instance().last_insert_rowid();
