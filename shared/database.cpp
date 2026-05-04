@@ -1,6 +1,7 @@
 #include "database.h"
 #include "sqlite_db.hpp"
 #include <iostream>
+#include <optional>
 
 Database::Database(const std::string& db_name) {
     // create table for jobs
@@ -59,12 +60,12 @@ int Database::insert_job(const Job& job) {
     return id;
 }
 
-Job Database::get_job_by_id(int id) {
+std::optional<Job> Database::get_job_by_id(int id) {
     std::string query = "SELECT * FROM jobs WHERE id = " + std::to_string(id);
     std::vector<Job> jobs;
     SqliteDatabase::instance().execute(query, get_job_cb, &jobs);
     if (jobs.empty()) {
-        return Job{};
+        return std::nullopt;
     }
     return jobs[0];
 }

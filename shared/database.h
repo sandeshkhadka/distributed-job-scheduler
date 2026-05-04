@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -47,7 +48,7 @@ class Database {
 
     // job
     virtual int insert_job(const Job& job);
-    Job get_job_by_id(int job_id);
+    std::optional<Job> get_job_by_id(int job_id);
     std::vector<Job> get_job_by_client_id(int client_id);
     std::vector<Job> get_all_jobs();
     std::vector<Job> get_jobs_by_status(const std::string& status);

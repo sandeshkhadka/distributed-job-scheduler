@@ -151,9 +151,10 @@ void WorkerClient::GetJob() {
         const std::string status = "not started";
         const int client_id = reply.client_id();
 
-        // TODO: check the job_id if it already exists before
-        // inserting
-        // Otherwise, the driver will scream
+        if (db.get_job_by_id(job_id)) {
+            // job already in db
+            return;
+        }
 
         db.insert_job(
             Job{.id = job_id, .payload = payload, .status = status, .client_id = client_id});
