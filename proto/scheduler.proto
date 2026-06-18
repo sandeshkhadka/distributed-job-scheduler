@@ -19,7 +19,8 @@ message RegisterWorkerReply {
 
 message SubmitJobRequest {
   int32 client_id = 1;
-  string payload = 2;
+  string job_type = 2;
+  map<string, string> params = 3;
 }
 
 message SubmitJobReply {
@@ -43,7 +44,8 @@ message GetJobRequest {
 
 message GetJobResponse {
   int32 job_id = 1;
-  string payload = 2;
+  string job_type = 2;
+  map<string, string> params = 3;
 }
 
 message RegisterClientRequest {
