@@ -1,3 +1,4 @@
+#include "argparse.hpp"
 #include "worker_client.hpp"
 #include <chrono>
 #include <grpcpp/grpcpp.h>
@@ -7,28 +8,52 @@
 
 using Logger = DJS::Logger;
 
-int main() {
+int main(int argc, char* argv[]) {
+    argparse::ArgumentParser program("worker");
+    program.add_argument("--token", "-k").help("Auth token for the worker (required on first run)");
+    program.add_argument("--scheduler", "-s")
+        .default_value(std::string("localhost:50051"))
+        .help("Scheduler address (default: localhost:50051)");
+
+    try {
+        program.parse_args(argc, argv);
+    } catch (const std::exception& err) {
+        std::cerr << err.what() << std::endl;
+        std::cerr << program;
+        return 1;
+    }
+
+    std::string scheduler_addr = program.get<std::string>("--scheduler");
     Logger::Info("Starting worker...");
+    Logger::Info("Connecting to scheduler at " + scheduler_addr);
 
-    // 1. Create a channel to connect to the Scheduler (which runs on port 50051)
     std::shared_ptr<grpc::Channel> channel =
-        grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials());
+        grpc::CreateChannel(scheduler_addr, grpc::InsecureChannelCredentials());
 
-    // 2. Initialize the client
     WorkerClient client(channel);
 
-    int port = 50052; // Port where this worker will eventually listen for jobs
+    std::string token;
+    try {
+        token = program.get<std::string>("--token");
+    } catch (const std::logic_error&) {
+    }
 
-    client.Register();
+    int registered = -1;
+    if (!token.empty()) {
+        registered = client.Register(token);
+    } else {
+        registered = client.Register();
+    }
 
-    // ask for jobs every 2 seconds until you get the job
+    if (registered < 0) {
+        Logger::Error("Registration failed. Exiting.");
+        return 1;
+    }
+
     while (true) {
         std::this_thread::sleep_for(std::chrono::seconds(2));
         client.GetJob();
     }
-
-    // Keep the worker alive (optional for now, but needed later when worker acts as a server)
-    // while (true) { std::this_thread::sleep_for(std::chrono::seconds(1)); }
 
     return 0;
 }
