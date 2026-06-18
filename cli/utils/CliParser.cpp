@@ -19,6 +19,7 @@ CliParser::CliParser(int argc, char* argv[]) : _dist_cli("dist_cli") {
 
     this->_actions.push_back("register");
     _register_cmd.add_description("Register the client to the scheduler");
+    _register_cmd.add_argument("--token", "-k").required().help("Auth token for the client");
 
     this->_actions.push_back("query");
     _query_cmd.add_description("Query the status of a job with given JOB_ID");
@@ -66,6 +67,9 @@ std::string CliParser::get_value(const std::string& flag) {
     try {
         if (_dist_cli.is_subcommand_used(_submit_cmd)) {
             return _submit_cmd.get(flag);
+        }
+        if (_dist_cli.is_subcommand_used(_register_cmd)) {
+            return _register_cmd.get(flag);
         }
     } catch (std::exception& e) {
         _logger.Error("Invalid value for flag: " + flag + "Error: " + e.what());

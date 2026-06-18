@@ -38,9 +38,10 @@ int main(int argc, char* argv[]) {
     }
 
     if (action == "register") {
+        std::string token = cli_parser.get_value("--token");
         std::cout << "Registering...\n";
         SchedulerClient client(
             grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
-        client.RegisterClient("localhost");
+        client.RegisterClient("localhost", token);
     }
 }

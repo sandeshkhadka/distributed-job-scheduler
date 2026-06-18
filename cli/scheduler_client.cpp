@@ -3,7 +3,15 @@
 #include <iostream>
 
 SchedulerClient::SchedulerClient(std::shared_ptr<grpc::Channel> channel)
-    : stub(djs::SchedulerService::NewStub(channel)) {}
+    : stub(djs::SchedulerService::NewStub(channel)) {
+    token_ = db.get_token();
+}
+
+void SchedulerClient::add_auth(grpc::ClientContext& context) {
+    if (!token_.empty()) {
+        context.AddMetadata("authorization", "Bearer " + token_);
+    }
+}
 
 void SchedulerClient::SubmitJob(const std::string& job_type,
                                 const std::map<std::string, std::string>& params) {
@@ -25,6 +33,7 @@ void SchedulerClient::SubmitJob(const std::string& job_type,
     djs::SubmitJobReply reply;
 
     grpc::ClientContext context;
+    add_auth(context);
 
     grpc::Status status = stub->SubmitJob(&context, request, &reply);
 
@@ -37,19 +46,23 @@ void SchedulerClient::SubmitJob(const std::string& job_type,
     }
 }
 
-void SchedulerClient::RegisterClient(const std::string& hostname) {
+void SchedulerClient::RegisterClient(const std::string& hostname, const std::string& token) {
+
+    token_ = token;
 
     djs::RegisterClientRequest request;
     request.set_hostname(hostname);
 
     djs::RegisterClientResponse reply;
     grpc::ClientContext context;
+    add_auth(context);
 
     grpc::Status status = stub->RegisterClient(&context, request, &reply);
 
     if (status.ok()) {
         if (reply.ok()) {
             db.insert_client(hostname, reply.client_id());
+            db.save_token(token_);
             std::cout << "message: " << reply.message() << "\n";
             std::cout << "client_id: " << reply.client_id() << "\n";
         } else {
