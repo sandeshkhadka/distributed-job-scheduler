@@ -38,9 +38,28 @@ void deserialize_params(const std::string& encoded,
 
 } // anonymous namespace
 
+static grpc::Status
+check_auth(grpc::ServerContext* context, SchedulerDatabase& db, const std::string& allowed_type) {
+    auto md = context->client_metadata().find("authorization");
+    if (md == context->client_metadata().end()) {
+        return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "missing authorization");
+    }
+    std::string raw(md->second.data(), md->second.length());
+    if (raw.substr(0, 7) != "Bearer ") {
+        return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "bad authorization format");
+    }
+    if (!db.is_token_valid(raw.substr(7), allowed_type)) {
+        return grpc::Status(grpc::StatusCode::PERMISSION_DENIED, "invalid or revoked token");
+    }
+    return grpc::Status::OK;
+}
+
 grpc::Status SchedulerServiceImpl::SubmitJob(grpc::ServerContext* context,
                                              const djs::SubmitJobRequest* request,
                                              djs::SubmitJobReply* reply) {
+    auto auth = check_auth(context, db, "client");
+    if (!auth.ok())
+        return auth;
 
     const auto& job_type = request->job_type();
     std::string params_str = serialize_params(request->params());
@@ -68,6 +87,9 @@ grpc::Status SchedulerServiceImpl::SubmitJob(grpc::ServerContext* context,
 grpc::Status SchedulerServiceImpl::RegisterWorker(grpc::ServerContext* context,
                                                   const djs::RegisterWorkerRequest* request,
                                                   djs::RegisterWorkerReply* reply) {
+    auto auth = check_auth(context, db, "worker");
+    if (!auth.ok())
+        return auth;
     Worker worker;
     worker.cpu_cores = request->cpu_cores();
     worker.mem_size = request->mem_size();
@@ -89,6 +111,9 @@ grpc::Status SchedulerServiceImpl::RegisterWorker(grpc::ServerContext* context,
 grpc::Status SchedulerServiceImpl::GetJob(grpc::ServerContext* context,
                                           const djs::GetJobRequest* request,
                                           djs::GetJobResponse* reply) {
+    auto auth = check_auth(context, db, "worker");
+    if (!auth.ok())
+        return auth;
     const int worker_id = request->worker_id();
 
     if (worker_id <= 0) {
@@ -122,10 +147,21 @@ grpc::Status SchedulerServiceImpl::GetJob(grpc::ServerContext* context,
 grpc::Status SchedulerServiceImpl::RegisterClient(grpc::ServerContext* context,
                                                   const djs::RegisterClientRequest* request,
                                                   djs::RegisterClientResponse* response) {
+    auto auth = check_auth(context, db, "client");
+    if (!auth.ok())
+        return auth;
+
     Client client;
     client.name = request->hostname();
     client.status = "active";
     int client_id = db.insert_client(client);
+
+    auto md = context->client_metadata().find("authorization");
+    std::string raw(md->second.data(), md->second.length());
+    int token_id = db.get_token_id(raw.substr(7));
+    if (token_id > 0) {
+        db.record_client_token_usage(client_id, token_id);
+    }
 
     std::cout << "Client Registered: [" << client_id << "]\n";
 

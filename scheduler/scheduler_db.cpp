@@ -10,7 +10,7 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
                                       ");";
     SqliteDatabase::instance().execute(create_client_table);
 
-    // create workter table
+    // create worker table
     std::string create_worker_table = "CREATE TABLE IF NOT EXISTS workers ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                                       "cpu_cores INTEGER NOT NULL, "
@@ -32,6 +32,28 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
                                           "FOREIGN KEY (worker_id) REFERENCES workers(id)"
                                           ");";
     SqliteDatabase::instance().execute(create_job_worker_table);
+
+    std::string create_auth_tokens = "CREATE TABLE IF NOT EXISTS auth_tokens ("
+                                     "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                                     "token TEXT NOT NULL UNIQUE, "
+                                     "description TEXT, "
+                                     "token_type TEXT NOT NULL DEFAULT 'client' "
+                                     "  CHECK (token_type IN ('client', 'worker')), "
+                                     "active INTEGER NOT NULL DEFAULT 1, "
+                                     "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                                     ");";
+    SqliteDatabase::instance().execute(create_auth_tokens);
+
+    std::string create_usage = "CREATE TABLE IF NOT EXISTS client_token_usage ("
+                               "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                               "client_id INTEGER NOT NULL, "
+                               "token_id INTEGER NOT NULL, "
+                               "last_used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                               "FOREIGN KEY (client_id) REFERENCES clients(id), "
+                               "FOREIGN KEY (token_id) REFERENCES auth_tokens(id), "
+                               "UNIQUE(client_id, token_id)"
+                               ");";
+    SqliteDatabase::instance().execute(create_usage);
 }
 
 void SchedulerDatabase::insert_worker_job(const WorkerJob& worker_job) {
@@ -106,4 +128,46 @@ int SchedulerDatabase::insert_client(const Client& client) {
     SqliteDatabase::instance().execute(query);
     id = SqliteDatabase::instance().last_insert_rowid();
     return id;
+}
+
+bool SchedulerDatabase::is_token_valid(const std::string& token, const std::string& token_type) {
+    std::string query = "SELECT COUNT(*) FROM auth_tokens "
+                        "WHERE token = '" +
+                        token +
+                        "' "
+                        "AND token_type = '" +
+                        token_type +
+                        "' "
+                        "AND active = 1";
+    int count = 0;
+    SqliteDatabase::instance().execute(query, token_exists_cb, &count);
+    return count > 0;
+}
+
+int SchedulerDatabase::get_token_id(const std::string& token) {
+    std::string query = "SELECT id FROM auth_tokens WHERE token = '" + token + "'";
+    int id = -1;
+    SqliteDatabase::instance().execute(query, token_id_cb, &id);
+    return id;
+}
+
+void SchedulerDatabase::record_client_token_usage(int client_id, int token_id) {
+    std::string query = "INSERT INTO client_token_usage (client_id, token_id) VALUES (" +
+                        std::to_string(client_id) + ", " + std::to_string(token_id) +
+                        ") "
+                        "ON CONFLICT(client_id, token_id) "
+                        "DO UPDATE SET last_used_at = CURRENT_TIMESTAMP";
+    SqliteDatabase::instance().execute(query);
+}
+
+int token_exists_cb(void* data, int argc, char** argv, char** col_name) {
+    int* count = static_cast<int*>(data);
+    *count = atoi(argv[0]);
+    return 0;
+}
+
+int token_id_cb(void* data, int argc, char** argv, char** col_name) {
+    int* id = static_cast<int*>(data);
+    *id = atoi(argv[0]);
+    return 0;
 }
