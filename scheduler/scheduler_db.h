@@ -62,4 +62,10 @@ class SchedulerDatabase : public Database {
     bool is_token_valid(const std::string& token, const std::string& token_type);
     int get_token_id(const std::string& token);
     void record_client_token_usage(int client_id, int token_id);
+
+    void update_job_status(int job_id, const std::string& status);
+    void save_job_result(int job_id,
+                         bool success,
+                         const std::string& message,
+                         const std::string& artifact_url);
 };

@@ -58,10 +58,24 @@ message RegisterClientResponse {
   string message = 3;
 }
 
+message ReportJobResultRequest {
+  int32 worker_id = 1;
+  int32 job_id = 2;
+  bool success = 3;
+  string message = 4;
+  string artifact_url = 5;
+  string metrics_json = 6;
+}
+
+message ReportJobResultReply {
+  bool ok = 1;
+}
+
 service SchedulerService {
   rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerReply);
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobReply);
   rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusReply);
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   rpc RegisterClient(RegisterClientRequest) returns (RegisterClientResponse);
+  rpc ReportJobResult(ReportJobResultRequest) returns (ReportJobResultReply);
 }

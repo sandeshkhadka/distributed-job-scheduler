@@ -54,6 +54,17 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
                                "UNIQUE(client_id, token_id)"
                                ");";
     SqliteDatabase::instance().execute(create_usage);
+
+    std::string create_results = "CREATE TABLE IF NOT EXISTS job_results ("
+                                 "job_id INTEGER PRIMARY KEY, "
+                                 "success INTEGER NOT NULL, "
+                                 "message TEXT, "
+                                 "artifact_url TEXT, "
+                                 "metrics_json TEXT, "
+                                 "completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                                 "FOREIGN KEY (job_id) REFERENCES jobs(id)"
+                                 ");";
+    SqliteDatabase::instance().execute(create_results);
 }
 
 void SchedulerDatabase::insert_worker_job(const WorkerJob& worker_job) {
@@ -157,6 +168,25 @@ void SchedulerDatabase::record_client_token_usage(int client_id, int token_id) {
                         ") "
                         "ON CONFLICT(client_id, token_id) "
                         "DO UPDATE SET last_used_at = CURRENT_TIMESTAMP";
+    SqliteDatabase::instance().execute(query);
+}
+
+void SchedulerDatabase::update_job_status(int job_id, const std::string& status) {
+    std::string query = "UPDATE jobs SET status = '" + status +
+                        "', updated_at = CURRENT_TIMESTAMP WHERE id = " + std::to_string(job_id) +
+                        ";";
+    SqliteDatabase::instance().execute(query);
+}
+
+void SchedulerDatabase::save_job_result(int job_id,
+                                        bool success,
+                                        const std::string& message,
+                                        const std::string& artifact_url) {
+    std::string query =
+        "INSERT OR REPLACE INTO job_results (job_id, success, message, artifact_url) "
+        "VALUES (" +
+        std::to_string(job_id) + ", " + std::to_string(success ? 1 : 0) + ", '" + message + "', '" +
+        artifact_url + "')";
     SqliteDatabase::instance().execute(query);
 }
 

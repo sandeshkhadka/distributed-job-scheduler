@@ -137,6 +137,9 @@ grpc::Status SchedulerServiceImpl::GetJob(grpc::ServerContext* context,
         return grpc::Status(grpc::NOT_FOUND, "No jobs available");
     }
 
+    db.insert_worker_job({worker_id, selected_job.id});
+    db.update_job_status(selected_job.id, "ongoing");
+
     reply->set_job_id(selected_job.id);
     reply->set_job_type(selected_job.job_type);
     deserialize_params(selected_job.params, *reply->mutable_params());
@@ -168,6 +171,28 @@ grpc::Status SchedulerServiceImpl::RegisterClient(grpc::ServerContext* context,
     response->set_ok(true);
     response->set_message("Client successfully registered");
     response->set_client_id(client_id);
+    return grpc::Status::OK;
+}
+
+grpc::Status SchedulerServiceImpl::ReportJobResult(grpc::ServerContext* context,
+                                                   const djs::ReportJobResultRequest* request,
+                                                   djs::ReportJobResultReply* reply) {
+    auto auth = check_auth(context, db, "worker");
+    if (!auth.ok())
+        return auth;
+
+    int job_id = request->job_id();
+    bool success = request->success();
+    std::string message = request->success() ? "completed" : "failed: " + request->message();
+    std::string artifact_url = request->artifact_url();
+
+    std::string status = request->success() ? "completed" : "failed";
+    db.update_job_status(job_id, status);
+    db.save_job_result(job_id, success, message, artifact_url);
+
+    Logger::Info("Job " + std::to_string(job_id) + " " + status);
+
+    reply->set_ok(true);
     return grpc::Status::OK;
 }
 
