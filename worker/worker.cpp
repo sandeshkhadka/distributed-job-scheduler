@@ -1,4 +1,5 @@
 #include "argparse.hpp"
+#include "executors/executor_registry.hpp"
 #include "worker_client.hpp"
 #include <chrono>
 #include <grpcpp/grpcpp.h>
@@ -50,9 +51,28 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    ExecutorRegistry::init();
+
     while (true) {
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        client.GetJob();
+        client.report_pending_results();
+
+        auto job = client.GetJob();
+        if (!job) {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            continue;
+        }
+
+        Logger::Info("Executing job " + std::to_string(job->job_id) + ": " + job->job_type);
+
+        auto executor = ExecutorRegistry::create(job->job_type);
+        if (!executor) {
+            client.store_job_result(job->job_id, {false, "unknown job type: " + job->job_type, ""});
+            continue;
+        }
+
+        auto result = executor->execute(job->params);
+        client.store_job_result(job->job_id, result);
+        Logger::Info("Job " + std::to_string(job->job_id) + " finished: " + result.message);
     }
 
     return 0;

@@ -75,24 +75,68 @@ int WorkerClient::do_register() {
     return worker_id;
 }
 
-void WorkerClient::GetJob() {
-    djs::GetJobRequest request;
-    djs::GetJobResponse reply;
-    grpc::ClientContext context;
-
+std::optional<ReceivedJob> WorkerClient::GetJob() {
     if (this->worker_id == -1) {
         Logger::Error("This worker is not registered. Register before running jobs!");
         exit(0);
     }
 
+    djs::GetJobRequest request;
     request.set_worker_id(this->worker_id);
+
+    djs::GetJobResponse reply;
+    grpc::ClientContext context;
     add_auth(context);
 
     grpc::Status status = stub_->GetJob(&context, request, &reply);
-    if (status.ok()) {
-        std::cout << "Job ID: " << reply.job_id() << std::endl;
-        std::cout << "Type: " << reply.job_type() << std::endl;
-    } else {
-        Logger::Info("RPC failed: " + status.error_message());
+    if (!status.ok()) {
+        if (status.error_code() == grpc::StatusCode::NOT_FOUND) {
+            return std::nullopt;
+        }
+        Logger::Info("GetJob RPC failed: " + status.error_message());
+        return std::nullopt;
+    }
+
+    ReceivedJob job;
+    job.job_id = reply.job_id();
+    job.job_type = reply.job_type();
+    for (const auto& [k, v] : reply.params()) {
+        job.params[k] = v;
+    }
+    return job;
+}
+
+void WorkerClient::store_job_result(int job_id, const JobResult& result) {
+    db.insert_job_result(job_id, result.success, result.message, result.artifact_url);
+    Logger::Info("Stored result for job " + std::to_string(job_id) + ": " + result.message);
+}
+
+void WorkerClient::report_pending_results() {
+    auto pending = db.get_unposted_results();
+    if (pending.empty())
+        return;
+
+    Logger::Info("Reporting " + std::to_string(pending.size()) + " pending result(s)...");
+
+    for (const auto& rec : pending) {
+        djs::ReportJobResultRequest request;
+        request.set_worker_id(this->worker_id);
+        request.set_job_id(rec.job_id);
+        request.set_success(rec.success);
+        request.set_message(rec.message);
+        request.set_artifact_url(rec.artifact_url);
+
+        djs::ReportJobResultReply reply;
+        grpc::ClientContext context;
+        add_auth(context);
+
+        grpc::Status status = stub_->ReportJobResult(&context, request, &reply);
+        if (status.ok() && reply.ok()) {
+            db.mark_result_posted(rec.id);
+            Logger::Info("Reported result for job " + std::to_string(rec.job_id));
+        } else {
+            Logger::Error("Failed to report result for job " + std::to_string(rec.job_id) + ": " +
+                          status.error_message());
+        }
     }
 }
