@@ -17,8 +17,11 @@ int WorkerClient::Register() {
 
     Logger::Info("Registration: Worker not registered. Registering worker...");
     djs::RegisterWorkerRequest request;
+
+    // TODO: Use some real worker name
     const std::string WORKER_NAME = "UniqueName";
 
+    // TODO: Use some real values
     request.set_cpu_cores(5);
     request.set_mem_size(16);
     request.set_disk_size(500);
@@ -61,8 +64,8 @@ void WorkerClient::GetJob() {
     grpc::Status status = stub_->GetJob(&context, request, &reply);
     if (status.ok()) {
         std::cout << "Job ID: " << reply.job_id() << std::endl;
-        std::cout << "Payload: " << reply.payload() << std::endl;
-        std::system(reply.payload().c_str());
+        std::cout << "Type: " << reply.job_type() << std::endl;
+        // std::system(reply.payload().c_str());
     } else {
         Logger::Info("RPC failed: " + status.error_message());
     }

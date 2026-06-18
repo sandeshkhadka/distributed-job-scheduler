@@ -5,7 +5,8 @@
 SchedulerClient::SchedulerClient(std::shared_ptr<grpc::Channel> channel)
     : stub(djs::SchedulerService::NewStub(channel)) {}
 
-void SchedulerClient::SubmitJob(const std::string& payload) {
+void SchedulerClient::SubmitJob(const std::string& job_type,
+                                const std::map<std::string, std::string>& params) {
 
     int client_id = db.get_active_client();
     if (client_id <= 0) {
@@ -15,7 +16,11 @@ void SchedulerClient::SubmitJob(const std::string& payload) {
 
     djs::SubmitJobRequest request;
     request.set_client_id(client_id);
-    request.set_payload(payload);
+    request.set_job_type(job_type);
+    auto* proto_params = request.mutable_params();
+    for (const auto& [k, v] : params) {
+        (*proto_params)[k] = v;
+    }
 
     djs::SubmitJobReply reply;
 

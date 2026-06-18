@@ -6,16 +6,48 @@
 
 using Logger = DJS::Logger;
 
+namespace {
+
+std::string serialize_params(const google::protobuf::Map<std::string, std::string>& params) {
+    std::string result;
+    for (const auto& [k, v] : params) {
+        if (!result.empty())
+            result += '\n';
+        result += k + "=" + v;
+    }
+    return result;
+}
+
+void deserialize_params(const std::string& encoded,
+                        google::protobuf::Map<std::string, std::string>& params) {
+    if (encoded.empty())
+        return;
+    size_t start = 0;
+    while (start < encoded.size()) {
+        size_t end = encoded.find('\n', start);
+        if (end == std::string::npos)
+            end = encoded.size();
+        auto line = encoded.substr(start, end - start);
+        auto eq = line.find('=');
+        if (eq != std::string::npos) {
+            params[line.substr(0, eq)] = line.substr(eq + 1);
+        }
+        start = end + 1;
+    }
+}
+
+} // anonymous namespace
+
 grpc::Status SchedulerServiceImpl::SubmitJob(grpc::ServerContext* context,
                                              const djs::SubmitJobRequest* request,
                                              djs::SubmitJobReply* reply) {
 
-    const std::string& payload = request->payload();
-
+    const auto& job_type = request->job_type();
+    std::string params_str = serialize_params(request->params());
     int client_id = request->client_id();
 
-    Logger::Info("SubmitJob: payload=" + payload);
-    int id = db.insert_job(payload, client_id);
+    Logger::Info("SubmitJob: type=" + job_type);
+    int id = db.insert_job(job_type, params_str, client_id);
     if (id > 0) {
         std::string job_id = std::to_string(id);
         reply->set_accepted(true);
@@ -81,7 +113,8 @@ grpc::Status SchedulerServiceImpl::GetJob(grpc::ServerContext* context,
     }
 
     reply->set_job_id(selected_job.id);
-    reply->set_payload(selected_job.payload);
+    reply->set_job_type(selected_job.job_type);
+    deserialize_params(selected_job.params, *reply->mutable_params());
     return grpc::Status::OK;
 }
 

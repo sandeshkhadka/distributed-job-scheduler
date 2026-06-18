@@ -4,7 +4,8 @@
 struct Job {
     int id;
     int client_id;
-    std::string payload;
+    std::string job_type;
+    std::string params;
     std::string status;
     std::string created_at;
     std::string updated_at;
@@ -16,7 +17,7 @@ class Database {
   public:
     Database(const std::string& db_name);
 
-    int insert_job(const std::string& payload, int client_id);
+    int insert_job(const std::string& job_type, const std::string& params, int client_id);
 
     Job get_job_by_id(int job_id);
     std::vector<Job> get_job_by_client_id(int client_id);

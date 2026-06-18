@@ -61,7 +61,7 @@ void SchedulerDatabase::update_worker_status(int worker_id, const std::string& s
 }
 
 std::vector<Job> SchedulerDatabase::get_worker_jobs(int worker_id) {
-    std::string query = "SELECT j.id, j.payload FROM jobs j "
+    std::string query = "SELECT j.* FROM jobs j "
                         "JOIN job_worker jw ON j.id = jw.job_id "
                         "WHERE jw.worker_id = " +
                         std::to_string(worker_id) + ";";

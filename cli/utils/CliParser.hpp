@@ -23,6 +23,7 @@ class CliParser {
     std::vector<std::string> get_possible_actions();
     void print_help();
     std::string get_value(const std::string&);
+    std::vector<std::string> get_list(const std::string&);
 };
 
 #endif
