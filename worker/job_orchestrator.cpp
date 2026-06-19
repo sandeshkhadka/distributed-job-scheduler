@@ -2,6 +2,8 @@
 #include "logger.h"
 #include <cerrno>
 #include <chrono>
+#include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <sys/wait.h>
@@ -103,6 +105,9 @@ JobHandle JobOrchestrator::execute(int job_id,
         cg.close();
 
         execvp(executor_path.c_str(), const_cast<char* const*>(cargs.data()));
+        dprintf(STDOUT_FILENO,
+                "{\"success\":false,\"message\":\"failed: execvp: %s\"}",
+                strerror(errno));
         _exit(1);
     }
 

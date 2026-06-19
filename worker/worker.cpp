@@ -84,10 +84,13 @@ int main(int argc, char* argv[]) {
 
     recover_pending_jobs(client, client.db);
 
-    std::string executor_path;
-    try {
-        executor_path = program.get<std::string>("--executor");
-    } catch (const std::logic_error&) {
+    std::string executor_path = program.get<std::string>("--executor");
+    if (executor_path == "djs-executor") {
+        std::string self = argv[0];
+        auto slash = self.rfind('/');
+        if (slash != std::string::npos) {
+            executor_path = self.substr(0, slash + 1) + "djs-executor";
+        }
     }
 
     JobOrchestrator orchestrator;

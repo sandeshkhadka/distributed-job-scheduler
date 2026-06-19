@@ -16,7 +16,7 @@ struct JobHandle {
 
 class JobOrchestrator {
   public:
-    std::string executor_path = "djs-executor";
+    std::string executor_path = "./build/djs-executor";
     std::function<void(int job_id, const JobResult& result)> on_completed;
 
     JobOrchestrator();
