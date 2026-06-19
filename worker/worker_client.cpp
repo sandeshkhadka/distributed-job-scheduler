@@ -149,6 +149,32 @@ void WorkerClient::store_job_result(int job_id, const JobResult& result) {
     Logger::Info("Stored result for job " + std::to_string(job_id) + ": " + result.message);
 }
 
+void WorkerClient::report_worker_metrics(const WorkerMetricsData& metrics) {
+    djs::WorkerMetrics request;
+    request.set_worker_id(this->worker_id);
+    request.set_cpu_percent(metrics.cpu_percent);
+    request.set_memory_percent(metrics.memory_percent);
+    request.set_memory_used_mb(metrics.memory_used_mb);
+    request.set_memory_total_mb(metrics.memory_total_mb);
+    request.set_disk_used_mb(metrics.disk_used_mb);
+    request.set_disk_total_mb(metrics.disk_total_mb);
+    request.set_disk_percent(metrics.disk_percent);
+    request.set_rx_bytes_per_sec(metrics.rx_bytes_per_sec);
+    request.set_tx_bytes_per_sec(metrics.tx_bytes_per_sec);
+    request.set_load_avg_1m(metrics.load_avg_1m);
+    request.set_active_jobs(db.count_active_jobs());
+    request.set_timestamp(time(nullptr));
+
+    djs::ReportWorkerMetricsResponse reply;
+    grpc::ClientContext context;
+    add_auth(context);
+
+    grpc::Status status = stub_->ReportWorkerMetrics(&context, request, &reply);
+    if (!status.ok()) {
+        Logger::Error("Failed to report metrics: " + status.error_message());
+    }
+}
+
 void WorkerClient::report_pending_results() {
     auto pending = db.get_unposted_results();
     if (pending.empty())

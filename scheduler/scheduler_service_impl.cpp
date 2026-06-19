@@ -230,6 +230,34 @@ grpc::Status SchedulerServiceImpl::ReportJobStarted(grpc::ServerContext* context
     return grpc::Status::OK;
 }
 
+grpc::Status SchedulerServiceImpl::ReportWorkerMetrics(grpc::ServerContext* context,
+                                                       const djs::WorkerMetrics* request,
+                                                       djs::ReportWorkerMetricsResponse* reply) {
+    auto auth = check_auth(context, db, "worker");
+    if (!auth.ok())
+        return auth;
+
+    db.save_worker_metrics(request->worker_id(),
+                           request->cpu_percent(),
+                           request->memory_percent(),
+                           request->memory_used_mb(),
+                           request->memory_total_mb(),
+                           request->disk_used_mb(),
+                           request->disk_total_mb(),
+                           request->disk_percent(),
+                           request->rx_bytes_per_sec(),
+                           request->tx_bytes_per_sec(),
+                           request->load_avg_1m(),
+                           request->active_jobs());
+
+    Logger::Info("Worker " + std::to_string(request->worker_id()) +
+                 " metrics: cpu=" + std::to_string(request->cpu_percent()) +
+                 "% mem=" + std::to_string(request->memory_percent()) + "%");
+
+    reply->set_accepted(true);
+    return grpc::Status::OK;
+}
+
 Job SchedulerServiceImpl::select_job(const Worker& worker, const std::vector<Job>& jobs) {
     for (auto job : jobs) {
         if (job.status == "not started") {

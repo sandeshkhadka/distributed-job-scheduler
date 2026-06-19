@@ -68,4 +68,17 @@ class SchedulerDatabase : public Database {
                          bool success,
                          const std::string& message,
                          const std::string& artifact_url);
+
+    void save_worker_metrics(int worker_id,
+                             double cpu_percent,
+                             double memory_percent,
+                             double memory_used_mb,
+                             double memory_total_mb,
+                             double disk_used_mb,
+                             double disk_total_mb,
+                             double disk_percent,
+                             double rx_bytes_per_sec,
+                             double tx_bytes_per_sec,
+                             double load_avg_1m,
+                             int active_jobs);
 };

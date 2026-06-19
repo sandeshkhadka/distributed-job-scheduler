@@ -43,6 +43,10 @@ class SchedulerServiceImpl final : public djs::SchedulerService::Service {
                                   const djs::ReportJobStartedRequest* request,
                                   djs::ReportJobStartedResponse* reply) override;
 
+    grpc::Status ReportWorkerMetrics(grpc::ServerContext* context,
+                                     const djs::WorkerMetrics* request,
+                                     djs::ReportWorkerMetricsResponse* reply) override;
+
   private:
     // The main function to select a job for a worker
     Job select_job(const Worker& worker, const std::vector<Job>& jobs);

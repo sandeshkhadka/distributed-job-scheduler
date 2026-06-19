@@ -1,5 +1,6 @@
 #include "argparse.hpp"
 #include "job_orchestrator.hpp"
+#include "metrics_collector.hpp"
 #include "worker_client.hpp"
 #include <chrono>
 #include <grpcpp/grpcpp.h>
@@ -102,8 +103,14 @@ int main(int argc, char* argv[]) {
                      result.message);
     };
 
+    MetricsCollector metrics_collector;
+    metrics_collector.collect();
+
     while (true) {
         client.report_pending_results();
+
+        auto metrics = metrics_collector.collect();
+        client.report_worker_metrics(metrics);
 
         auto job = client.GetJob();
         if (!job) {

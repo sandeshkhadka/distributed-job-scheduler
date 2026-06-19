@@ -65,6 +65,24 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
                                  "FOREIGN KEY (job_id) REFERENCES jobs(id)"
                                  ");";
     SqliteDatabase::instance().execute(create_results);
+
+    std::string create_metrics = "CREATE TABLE IF NOT EXISTS worker_metrics ("
+                                 "worker_id INTEGER PRIMARY KEY, "
+                                 "cpu_percent REAL, "
+                                 "memory_percent REAL, "
+                                 "memory_used_mb REAL, "
+                                 "memory_total_mb REAL, "
+                                 "disk_used_mb REAL, "
+                                 "disk_total_mb REAL, "
+                                 "disk_percent REAL, "
+                                 "rx_bytes_per_sec REAL, "
+                                 "tx_bytes_per_sec REAL, "
+                                 "load_avg_1m REAL, "
+                                 "active_jobs INTEGER, "
+                                 "reported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                                 "FOREIGN KEY (worker_id) REFERENCES workers(id)"
+                                 ");";
+    SqliteDatabase::instance().execute(create_metrics);
 }
 
 void SchedulerDatabase::insert_worker_job(const WorkerJob& worker_job) {
@@ -187,6 +205,33 @@ void SchedulerDatabase::save_job_result(int job_id,
         "VALUES (" +
         std::to_string(job_id) + ", " + std::to_string(success ? 1 : 0) + ", '" + message + "', '" +
         artifact_url + "')";
+    SqliteDatabase::instance().execute(query);
+}
+
+void SchedulerDatabase::save_worker_metrics(int worker_id,
+                                            double cpu_percent,
+                                            double memory_percent,
+                                            double memory_used_mb,
+                                            double memory_total_mb,
+                                            double disk_used_mb,
+                                            double disk_total_mb,
+                                            double disk_percent,
+                                            double rx_bytes_per_sec,
+                                            double tx_bytes_per_sec,
+                                            double load_avg_1m,
+                                            int active_jobs) {
+    std::string query =
+        "INSERT OR REPLACE INTO worker_metrics "
+        "(worker_id, cpu_percent, memory_percent, memory_used_mb, memory_total_mb, "
+        "disk_used_mb, disk_total_mb, disk_percent, rx_bytes_per_sec, tx_bytes_per_sec, "
+        "load_avg_1m, active_jobs) "
+        "VALUES (" +
+        std::to_string(worker_id) + ", " + std::to_string(cpu_percent) + ", " +
+        std::to_string(memory_percent) + ", " + std::to_string(memory_used_mb) + ", " +
+        std::to_string(memory_total_mb) + ", " + std::to_string(disk_used_mb) + ", " +
+        std::to_string(disk_total_mb) + ", " + std::to_string(disk_percent) + ", " +
+        std::to_string(rx_bytes_per_sec) + ", " + std::to_string(tx_bytes_per_sec) + ", " +
+        std::to_string(load_avg_1m) + ", " + std::to_string(active_jobs) + ")";
     SqliteDatabase::instance().execute(query);
 }
 
