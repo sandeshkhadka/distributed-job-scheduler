@@ -106,6 +106,44 @@ std::optional<ReceivedJob> WorkerClient::GetJob() {
     return job;
 }
 
+bool WorkerClient::confirm_job_received(int job_id) {
+    djs::ConfirmJobReceivedRequest request;
+    request.set_job_id(job_id);
+    request.set_worker_id(this->worker_id);
+
+    djs::ConfirmJobReceivedResponse reply;
+    grpc::ClientContext context;
+    add_auth(context);
+
+    grpc::Status status = stub_->ConfirmJobReceived(&context, request, &reply);
+    if (!status.ok()) {
+        Logger::Error("ConfirmJobReceived failed for job " + std::to_string(job_id) + ": " +
+                      status.error_message());
+        return false;
+    }
+    Logger::Info("Confirmed job " + std::to_string(job_id) + ": " + reply.message());
+    return true;
+}
+
+bool WorkerClient::report_job_started(int job_id) {
+    djs::ReportJobStartedRequest request;
+    request.set_job_id(job_id);
+    request.set_worker_id(this->worker_id);
+
+    djs::ReportJobStartedResponse reply;
+    grpc::ClientContext context;
+    add_auth(context);
+
+    grpc::Status status = stub_->ReportJobStarted(&context, request, &reply);
+    if (!status.ok()) {
+        Logger::Error("ReportJobStarted failed for job " + std::to_string(job_id) + ": " +
+                      status.error_message());
+        return false;
+    }
+    Logger::Info("Reported job " + std::to_string(job_id) + " started: " + reply.message());
+    return true;
+}
+
 void WorkerClient::store_job_result(int job_id, const JobResult& result) {
     db.insert_job_result(job_id, result.success, result.message, result.artifact_url);
     Logger::Info("Stored result for job " + std::to_string(job_id) + ": " + result.message);

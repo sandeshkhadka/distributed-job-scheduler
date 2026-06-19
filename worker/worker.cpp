@@ -9,6 +9,34 @@
 
 using Logger = DJS::Logger;
 
+namespace {
+
+std::string serialize_params(const std::map<std::string, std::string>& params) {
+    std::string result;
+    for (const auto& [k, v] : params) {
+        if (!result.empty())
+            result += '\n';
+        result += k + "=" + v;
+    }
+    return result;
+}
+
+void recover_pending_jobs(WorkerClient& client, WorkerDatabase& db) {
+    auto pending = db.get_pending_jobs();
+    if (pending.empty())
+        return;
+
+    Logger::Info("Recovering " + std::to_string(pending.size()) + " pending job(s) from crash...");
+    for (const auto& rec : pending) {
+        Logger::Info("Job " + std::to_string(rec.job_id) + " was " + rec.status +
+                     " before crash. Reporting as failed.");
+        client.store_job_result(rec.job_id, {false, "failed: worker restarted", ""});
+        db.update_received_job_status(rec.job_id, "failed");
+    }
+}
+
+} // namespace
+
 int main(int argc, char* argv[]) {
     argparse::ArgumentParser program("worker");
     program.add_argument("--token", "-k").help("Auth token for the worker (required on first run)");
@@ -53,6 +81,8 @@ int main(int argc, char* argv[]) {
 
     ExecutorRegistry::init();
 
+    recover_pending_jobs(client, client.db);
+
     while (true) {
         client.report_pending_results();
 
@@ -62,16 +92,36 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        client.db.store_received_job(job->job_id, job->job_type, serialize_params(job->params));
+        Logger::Info("Stored job " + std::to_string(job->job_id) + " locally before confirmation");
+
+        if (!client.confirm_job_received(job->job_id)) {
+            client.store_job_result(job->job_id,
+                                    {false, "failed: confirm job received failed", ""});
+            client.db.update_received_job_status(job->job_id, "failed");
+            continue;
+        }
+        client.db.update_received_job_status(job->job_id, "scheduled");
+
+        if (!client.report_job_started(job->job_id)) {
+            client.store_job_result(job->job_id, {false, "failed: report job started failed", ""});
+            client.db.update_received_job_status(job->job_id, "failed");
+            continue;
+        }
+        client.db.update_received_job_status(job->job_id, "started");
+
         Logger::Info("Executing job " + std::to_string(job->job_id) + ": " + job->job_type);
 
         auto executor = ExecutorRegistry::create(job->job_type);
         if (!executor) {
             client.store_job_result(job->job_id, {false, "unknown job type: " + job->job_type, ""});
+            client.db.update_received_job_status(job->job_id, "failed");
             continue;
         }
 
         auto result = executor->execute(job->params);
         client.store_job_result(job->job_id, result);
+        client.db.update_received_job_status(job->job_id, result.success ? "completed" : "failed");
         Logger::Info("Job " + std::to_string(job->job_id) + " finished: " + result.message);
     }
 

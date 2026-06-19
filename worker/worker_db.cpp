@@ -26,6 +26,15 @@ WorkerDatabase::WorkerDatabase() : Database("workers.db") {
                                  "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
                                  ");";
     SqliteDatabase::instance().execute(create_results);
+
+    std::string create_received = "CREATE TABLE IF NOT EXISTS received_jobs ("
+                                  "job_id INTEGER PRIMARY KEY, "
+                                  "job_type TEXT NOT NULL, "
+                                  "params TEXT, "
+                                  "status TEXT NOT NULL DEFAULT 'received', "
+                                  "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                                  ");";
+    SqliteDatabase::instance().execute(create_received);
 }
 
 int WorkerDatabase::get_registered_worker_id() {
@@ -94,6 +103,53 @@ int get_token_cb(void* data, int argc, char** argv, char** col_name) {
     std::string* token = static_cast<std::string*>(data);
     if (argv[0])
         *token = argv[0];
+    return 0;
+}
+
+void WorkerDatabase::store_received_job(int job_id,
+                                        const std::string& job_type,
+                                        const std::string& params) {
+    std::string query = "INSERT OR REPLACE INTO received_jobs (job_id, job_type, params, status) "
+                        "VALUES (" +
+                        std::to_string(job_id) + ", '" + job_type + "', '" + params +
+                        "', 'received')";
+    SqliteDatabase::instance().execute(query);
+}
+
+void WorkerDatabase::update_received_job_status(int job_id, const std::string& status) {
+    std::string query = "UPDATE received_jobs SET status = '" + status +
+                        "' WHERE job_id = " + std::to_string(job_id);
+    SqliteDatabase::instance().execute(query);
+}
+
+std::vector<ReceivedJobRecord> WorkerDatabase::get_pending_jobs() {
+    std::vector<ReceivedJobRecord> records;
+    SqliteDatabase::instance().execute(
+        "SELECT job_id, job_type, params, status, created_at "
+        "FROM received_jobs WHERE status NOT IN ('completed', 'failed') ORDER BY created_at ASC",
+        received_job_list_cb,
+        &records);
+    return records;
+}
+
+void WorkerDatabase::remove_received_job(int job_id) {
+    std::string query = "DELETE FROM received_jobs WHERE job_id = " + std::to_string(job_id);
+    SqliteDatabase::instance().execute(query);
+}
+
+int received_job_list_cb(void* data, int argc, char** argv, char** col_name) {
+    auto* records = static_cast<std::vector<ReceivedJobRecord>*>(data);
+    ReceivedJobRecord r;
+    r.job_id = atoi(argv[0]);
+    if (argc > 1 && argv[1])
+        r.job_type = argv[1];
+    if (argc > 2 && argv[2])
+        r.params = argv[2];
+    if (argc > 3 && argv[3])
+        r.status = argv[3];
+    if (argc > 4 && argv[4])
+        r.created_at = argv[4];
+    records->push_back(r);
     return 0;
 }
 

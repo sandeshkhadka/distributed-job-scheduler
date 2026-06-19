@@ -71,6 +71,26 @@ message ReportJobResultReply {
   bool ok = 1;
 }
 
+message ConfirmJobReceivedRequest {
+  int64 job_id = 1;
+  int64 worker_id = 2;
+}
+
+message ConfirmJobReceivedResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message ReportJobStartedRequest {
+  int64 job_id = 1;
+  int64 worker_id = 2;
+}
+
+message ReportJobStartedResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
 service SchedulerService {
   rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerReply);
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobReply);
@@ -78,4 +98,6 @@ service SchedulerService {
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   rpc RegisterClient(RegisterClientRequest) returns (RegisterClientResponse);
   rpc ReportJobResult(ReportJobResultRequest) returns (ReportJobResultReply);
+  rpc ConfirmJobReceived(ConfirmJobReceivedRequest) returns (ConfirmJobReceivedResponse);
+  rpc ReportJobStarted(ReportJobStartedRequest) returns (ReportJobStartedResponse);
 }

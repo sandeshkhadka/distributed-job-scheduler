@@ -196,6 +196,40 @@ grpc::Status SchedulerServiceImpl::ReportJobResult(grpc::ServerContext* context,
     return grpc::Status::OK;
 }
 
+grpc::Status SchedulerServiceImpl::ConfirmJobReceived(grpc::ServerContext* context,
+                                                      const djs::ConfirmJobReceivedRequest* request,
+                                                      djs::ConfirmJobReceivedResponse* reply) {
+    auto auth = check_auth(context, db, "worker");
+    if (!auth.ok())
+        return auth;
+
+    int job_id = request->job_id();
+    db.update_job_status(job_id, "scheduled");
+    Logger::Info("Job " + std::to_string(job_id) + " confirmed by worker " +
+                 std::to_string(request->worker_id()));
+
+    reply->set_accepted(true);
+    reply->set_message("confirmed");
+    return grpc::Status::OK;
+}
+
+grpc::Status SchedulerServiceImpl::ReportJobStarted(grpc::ServerContext* context,
+                                                    const djs::ReportJobStartedRequest* request,
+                                                    djs::ReportJobStartedResponse* reply) {
+    auto auth = check_auth(context, db, "worker");
+    if (!auth.ok())
+        return auth;
+
+    int job_id = request->job_id();
+    db.update_job_status(job_id, "started");
+    Logger::Info("Job " + std::to_string(job_id) + " started by worker " +
+                 std::to_string(request->worker_id()));
+
+    reply->set_accepted(true);
+    reply->set_message("started");
+    return grpc::Status::OK;
+}
+
 Job SchedulerServiceImpl::select_job(const Worker& worker, const std::vector<Job>& jobs) {
     for (auto job : jobs) {
         if (job.status == "not started") {
