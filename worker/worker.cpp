@@ -43,6 +43,9 @@ int main(int argc, char* argv[]) {
     program.add_argument("--scheduler", "-s")
         .default_value(std::string("localhost:50051"))
         .help("Scheduler address (default: localhost:50051)");
+    program.add_argument("--executor", "-e")
+        .default_value(std::string("djs-executor"))
+        .help("Path to djs-executor binary (default: djs-executor)");
 
     try {
         program.parse_args(argc, argv);
@@ -81,7 +84,14 @@ int main(int argc, char* argv[]) {
 
     recover_pending_jobs(client, client.db);
 
+    std::string executor_path;
+    try {
+        executor_path = program.get<std::string>("--executor");
+    } catch (const std::logic_error&) {
+    }
+
     JobOrchestrator orchestrator;
+    orchestrator.executor_path = executor_path;
     orchestrator.on_completed = [&](int job_id, const JobResult& result) {
         client.store_job_result(job_id, result);
         client.db.update_received_job_status(job_id, result.success ? "completed" : "failed");

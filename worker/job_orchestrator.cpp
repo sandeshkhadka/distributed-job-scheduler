@@ -41,7 +41,7 @@ std::vector<std::string> JobOrchestrator::build_exec_args(
     int job_id, const std::string& job_type, const std::map<std::string, std::string>& params) {
     (void)job_id;
     std::vector<std::string> args;
-    args.emplace_back("djs-executor");
+    args.emplace_back(executor_path);
     args.emplace_back("--type");
     args.emplace_back(job_type);
     for (const auto& [k, v] : params) {
@@ -102,7 +102,7 @@ JobHandle JobOrchestrator::execute(int job_id,
             cg << getpid();
         cg.close();
 
-        execvp("djs-executor", const_cast<char* const*>(cargs.data()));
+        execvp(executor_path.c_str(), const_cast<char* const*>(cargs.data()));
         _exit(1);
     }
 
