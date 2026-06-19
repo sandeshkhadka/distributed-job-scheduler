@@ -1,5 +1,5 @@
 #include "argparse.hpp"
-#include "executors/executor_registry.hpp"
+#include "job_orchestrator.hpp"
 #include "worker_client.hpp"
 #include <chrono>
 #include <grpcpp/grpcpp.h>
@@ -35,7 +35,7 @@ void recover_pending_jobs(WorkerClient& client, WorkerDatabase& db) {
     }
 }
 
-} // namespace
+} // anonymous namespace
 
 int main(int argc, char* argv[]) {
     argparse::ArgumentParser program("worker");
@@ -79,9 +79,15 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    ExecutorRegistry::init();
-
     recover_pending_jobs(client, client.db);
+
+    JobOrchestrator orchestrator;
+    orchestrator.on_completed = [&](int job_id, const JobResult& result) {
+        client.store_job_result(job_id, result);
+        client.db.update_received_job_status(job_id, result.success ? "completed" : "failed");
+        Logger::Info("Orchestrator completed job " + std::to_string(job_id) + ": " +
+                     result.message);
+    };
 
     while (true) {
         client.report_pending_results();
@@ -110,19 +116,17 @@ int main(int argc, char* argv[]) {
         }
         client.db.update_received_job_status(job->job_id, "started");
 
-        Logger::Info("Executing job " + std::to_string(job->job_id) + ": " + job->job_type);
+        Logger::Info("Launching job " + std::to_string(job->job_id) + ": " + job->job_type);
 
-        auto executor = ExecutorRegistry::create(job->job_type);
-        if (!executor) {
-            client.store_job_result(job->job_id, {false, "unknown job type: " + job->job_type, ""});
+        auto handle = orchestrator.execute(job->job_id, job->job_type, job->params);
+        if (handle.pid < 0) {
+            client.store_job_result(job->job_id, {false, "failed: orchestration setup failed", ""});
             client.db.update_received_job_status(job->job_id, "failed");
             continue;
         }
 
-        auto result = executor->execute(job->params);
-        client.store_job_result(job->job_id, result);
-        client.db.update_received_job_status(job->job_id, result.success ? "completed" : "failed");
-        Logger::Info("Job " + std::to_string(job->job_id) + " finished: " + result.message);
+        Logger::Info("Job " + std::to_string(job->job_id) + " running as PID " +
+                     std::to_string(handle.pid));
     }
 
     return 0;
