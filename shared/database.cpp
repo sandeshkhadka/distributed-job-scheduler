@@ -5,11 +5,10 @@
 Database::Database(const std::string& db_name) {
     SqliteDatabase::init(db_name);
     std::string query = "CREATE TABLE IF NOT EXISTS jobs ("
-                        "id INTEGER PRIMARY KEY "
-                        ", payload TEXT NOT NULL"
-                        ", status TEXT NOT NULL CHECK (status IN (\"not started\", \"ongoing\", "
-                        "\"completed\", \"terminated\"))"
-                        "DEFAULT 'not started'"
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT"
+                        ", job_type TEXT NOT NULL"
+                        ", params TEXT NOT NULL DEFAULT ''"
+                        ", status TEXT NOT NULL DEFAULT 'not started'"
                         ", client_id INTEGER NOT NULL"
                         ", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
                         ", updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
@@ -18,9 +17,9 @@ Database::Database(const std::string& db_name) {
     // create table for jobs
 }
 
-int Database::insert_job(const std::string& payload, int client_id) {
-    std::string query = "INSERT INTO jobs (payload, client_id) VALUES (\"" + payload + "\", " +
-                        std::to_string(client_id) + ")";
+int Database::insert_job(const std::string& job_type, const std::string& params, int client_id) {
+    std::string query = "INSERT INTO jobs (job_type, params, client_id) VALUES ('" + job_type +
+                        "', '" + params + "', " + std::to_string(client_id) + ")";
     int id;
     SqliteDatabase::instance().execute(query);
     id = SqliteDatabase::instance().last_insert_rowid();
@@ -54,11 +53,12 @@ int get_job_cb(void* container, int argc, char** argv, char** col_name) {
     std::vector<Job>* job = static_cast<std::vector<Job>*>(container);
     Job j;
     j.id = std::stoi(argv[0]);
-    j.payload = argv[1];
-    j.status = argv[2];
-    j.client_id = std::stoi(argv[3]);
-    j.created_at = argv[4];
-    j.updated_at = argv[4];
+    j.job_type = argv[1];
+    j.params = argv[2];
+    j.status = argv[3];
+    j.client_id = std::stoi(argv[4]);
+    j.created_at = argv[5];
+    j.updated_at = argv[6];
     job->emplace_back(j);
     return 0;
 }

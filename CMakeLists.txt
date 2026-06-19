@@ -59,9 +59,17 @@ add_library(djs_proto STATIC
 target_include_directories(djs_proto PUBLIC ${GENERATED_DIR})
 target_link_libraries(djs_proto PUBLIC gRPC::grpc++ protobuf::libprotobuf )
 
+# Executor library (shared between worker and djs-executor)
+file(GLOB_RECURSE EXECUTOR_SOURCES CONFIGURE_DEPENDS "worker/executors/*.cpp")
+add_library(executor_impl STATIC ${EXECUTOR_SOURCES})
+target_include_directories(executor_impl PUBLIC "${CMAKE_SOURCE_DIR}/worker")
+
 # helper macro to add target
 macro(add_component NAME)
   file(GLOB_RECURSE _SOURCES CONFIGURE_DEPENDS "${NAME}/*.cpp")
+  if ("${NAME}" STREQUAL "worker")
+    list(FILTER _SOURCES EXCLUDE REGEX ".*/executors/.*")
+  endif()
   add_executable(${NAME} ${_SOURCES})
   target_include_directories(${NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/${NAME}"
@@ -76,3 +84,12 @@ endmacro()
 add_component(scheduler)
 add_component(cli)
 add_component(worker)
+add_component(admin)
+
+# Wire executor_impl into worker
+target_link_libraries(worker PUBLIC executor_impl)
+
+# djs-executor: standalone binary for isolated job execution
+add_executable(djs-executor executor/main.cpp)
+target_include_directories(djs-executor PRIVATE "${CMAKE_SOURCE_DIR}/worker")
+target_link_libraries(djs-executor executor_impl)

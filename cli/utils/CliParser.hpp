@@ -10,6 +10,7 @@ class CliParser {
   private:
     ArgumentParser _dist_cli;
     ArgumentParser _submit_cmd{"submit"};
+    ArgumentParser _register_cmd{"register"};
     ArgumentParser _query_cmd{"query"};
     ArgumentParser _cancel_cmd{"cancel"};
     ArgumentParser _list_cmd{"list"};
@@ -22,6 +23,7 @@ class CliParser {
     std::vector<std::string> get_possible_actions();
     void print_help();
     std::string get_value(const std::string&);
+    std::vector<std::string> get_list(const std::string&);
 };
 
 #endif

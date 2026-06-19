@@ -18,7 +18,9 @@ message RegisterWorkerReply {
 }
 
 message SubmitJobRequest {
-  string payload = 2;
+  int32 client_id = 1;
+  string job_type = 2;
+  map<string, string> params = 3;
 }
 
 message SubmitJobReply {
@@ -42,7 +44,51 @@ message GetJobRequest {
 
 message GetJobResponse {
   int32 job_id = 1;
-  string payload = 2;
+  string job_type = 2;
+  map<string, string> params = 3;
+}
+
+message RegisterClientRequest {
+  string hostname = 1;
+}
+
+message RegisterClientResponse {
+  int32 client_id = 1;
+  bool ok = 2;
+  string message = 3;
+}
+
+message ReportJobResultRequest {
+  int32 worker_id = 1;
+  int32 job_id = 2;
+  bool success = 3;
+  string message = 4;
+  string artifact_url = 5;
+  string metrics_json = 6;
+}
+
+message ReportJobResultReply {
+  bool ok = 1;
+}
+
+message ConfirmJobReceivedRequest {
+  int64 job_id = 1;
+  int64 worker_id = 2;
+}
+
+message ConfirmJobReceivedResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message ReportJobStartedRequest {
+  int64 job_id = 1;
+  int64 worker_id = 2;
+}
+
+message ReportJobStartedResponse {
+  bool accepted = 1;
+  string message = 2;
 }
 
 service SchedulerService {
@@ -50,4 +96,8 @@ service SchedulerService {
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobReply);
   rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusReply);
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
+  rpc RegisterClient(RegisterClientRequest) returns (RegisterClientResponse);
+  rpc ReportJobResult(ReportJobResultRequest) returns (ReportJobResultReply);
+  rpc ConfirmJobReceived(ConfirmJobReceivedRequest) returns (ConfirmJobReceivedResponse);
+  rpc ReportJobStarted(ReportJobStartedRequest) returns (ReportJobStartedResponse);
 }

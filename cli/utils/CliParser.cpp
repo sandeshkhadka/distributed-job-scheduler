@@ -10,12 +10,16 @@ CliParser::CliParser(int argc, char* argv[]) : _dist_cli("dist_cli") {
     _logger = DJS::Logger();
     this->_actions.push_back("submit");
     _submit_cmd.add_description("Submit a job to the scheduler");
-    // submit.add_argument("job");
-    // presence of this flag indicates that we're being given a job file
-    _submit_cmd.add_argument("--type, -t").required().default_value("build_docker_image").help("");
-    _submit_cmd.add_argument("--payload", "-p")
+    _submit_cmd.add_argument("--type", "-t")
         .required()
-        .help("Just a simple unix command for now");
+        .help("Job type (e.g. stress_cpu, stress_mem, mixed_load)");
+    _submit_cmd.add_argument("--param", "-P")
+        .append()
+        .help("key=value parameter for the job (repeatable)");
+
+    this->_actions.push_back("register");
+    _register_cmd.add_description("Register the client to the scheduler");
+    _register_cmd.add_argument("--token", "-k").required().help("Auth token for the client");
 
     this->_actions.push_back("query");
     _query_cmd.add_description("Query the status of a job with given JOB_ID");
@@ -31,6 +35,7 @@ CliParser::CliParser(int argc, char* argv[]) : _dist_cli("dist_cli") {
     _list_cmd.add_description("List the jobs");
 
     this->_dist_cli.add_subparser(_submit_cmd);
+    this->_dist_cli.add_subparser(_register_cmd);
     this->_dist_cli.add_subparser(_query_cmd);
     this->_dist_cli.add_subparser(_cancel_cmd);
     this->_dist_cli.add_subparser(_list_cmd);
@@ -63,11 +68,25 @@ std::string CliParser::get_value(const std::string& flag) {
         if (_dist_cli.is_subcommand_used(_submit_cmd)) {
             return _submit_cmd.get(flag);
         }
+        if (_dist_cli.is_subcommand_used(_register_cmd)) {
+            return _register_cmd.get(flag);
+        }
     } catch (std::exception& e) {
         _logger.Error("Invalid value for flag: " + flag + "Error: " + e.what());
         value = "";
     }
     return value;
+}
+
+std::vector<std::string> CliParser::get_list(const std::string& flag) {
+    if (_dist_cli.is_subcommand_used(_submit_cmd)) {
+        try {
+            return _submit_cmd.get<std::vector<std::string>>(flag);
+        } catch (const std::logic_error&) {
+            return {};
+        }
+    }
+    return {};
 }
 
 void CliParser::print_help() { std::cout << _dist_cli; }

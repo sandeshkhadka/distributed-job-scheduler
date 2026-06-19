@@ -5,11 +5,12 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
     // create client table
     std::string create_client_table = "CREATE TABLE IF NOT EXISTS clients ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                                      "name TEXT NOT NULL, "
+                                      "name TEXT NOT NULL, " // hostname
                                       "status TEXT NOT NULL"
                                       ");";
     SqliteDatabase::instance().execute(create_client_table);
-    // create workter table
+
+    // create worker table
     std::string create_worker_table = "CREATE TABLE IF NOT EXISTS workers ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                                       "cpu_cores INTEGER NOT NULL, "
@@ -21,6 +22,7 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
                                       "status TEXT NOT NULL"
                                       ");";
     SqliteDatabase::instance().execute(create_worker_table);
+
     // create job worker join table
     std::string create_job_worker_table = "CREATE TABLE IF NOT EXISTS job_worker ("
                                           "job_id INTEGER NOT NULL, "
@@ -30,6 +32,39 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
                                           "FOREIGN KEY (worker_id) REFERENCES workers(id)"
                                           ");";
     SqliteDatabase::instance().execute(create_job_worker_table);
+
+    std::string create_auth_tokens = "CREATE TABLE IF NOT EXISTS auth_tokens ("
+                                     "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                                     "token TEXT NOT NULL UNIQUE, "
+                                     "description TEXT, "
+                                     "token_type TEXT NOT NULL DEFAULT 'client' "
+                                     "  CHECK (token_type IN ('client', 'worker')), "
+                                     "active INTEGER NOT NULL DEFAULT 1, "
+                                     "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                                     ");";
+    SqliteDatabase::instance().execute(create_auth_tokens);
+
+    std::string create_usage = "CREATE TABLE IF NOT EXISTS client_token_usage ("
+                               "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                               "client_id INTEGER NOT NULL, "
+                               "token_id INTEGER NOT NULL, "
+                               "last_used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                               "FOREIGN KEY (client_id) REFERENCES clients(id), "
+                               "FOREIGN KEY (token_id) REFERENCES auth_tokens(id), "
+                               "UNIQUE(client_id, token_id)"
+                               ");";
+    SqliteDatabase::instance().execute(create_usage);
+
+    std::string create_results = "CREATE TABLE IF NOT EXISTS job_results ("
+                                 "job_id INTEGER PRIMARY KEY, "
+                                 "success INTEGER NOT NULL, "
+                                 "message TEXT, "
+                                 "artifact_url TEXT, "
+                                 "metrics_json TEXT, "
+                                 "completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                                 "FOREIGN KEY (job_id) REFERENCES jobs(id)"
+                                 ");";
+    SqliteDatabase::instance().execute(create_results);
 }
 
 void SchedulerDatabase::insert_worker_job(const WorkerJob& worker_job) {
@@ -59,7 +94,7 @@ void SchedulerDatabase::update_worker_status(int worker_id, const std::string& s
 }
 
 std::vector<Job> SchedulerDatabase::get_worker_jobs(int worker_id) {
-    std::string query = "SELECT j.id, j.payload FROM jobs j "
+    std::string query = "SELECT j.* FROM jobs j "
                         "JOIN job_worker jw ON j.id = jw.job_id "
                         "WHERE jw.worker_id = " +
                         std::to_string(worker_id) + ";";
@@ -93,5 +128,76 @@ int get_worker_cb(void* data, int argc, char** argv, char** col_name) {
     worker.name = argv[6];
     worker.status = argv[7];
     workers->push_back(worker);
+    return 0;
+}
+
+int SchedulerDatabase::insert_client(const Client& client) {
+    std::string query = "INSERT INTO clients (name, status) VALUES ('" + client.name + "', '" +
+                        client.status + "')";
+
+    int id;
+    SqliteDatabase::instance().execute(query);
+    id = SqliteDatabase::instance().last_insert_rowid();
+    return id;
+}
+
+bool SchedulerDatabase::is_token_valid(const std::string& token, const std::string& token_type) {
+    std::string query = "SELECT COUNT(*) FROM auth_tokens "
+                        "WHERE token = '" +
+                        token +
+                        "' "
+                        "AND token_type = '" +
+                        token_type +
+                        "' "
+                        "AND active = 1";
+    int count = 0;
+    SqliteDatabase::instance().execute(query, token_exists_cb, &count);
+    return count > 0;
+}
+
+int SchedulerDatabase::get_token_id(const std::string& token) {
+    std::string query = "SELECT id FROM auth_tokens WHERE token = '" + token + "'";
+    int id = -1;
+    SqliteDatabase::instance().execute(query, token_id_cb, &id);
+    return id;
+}
+
+void SchedulerDatabase::record_client_token_usage(int client_id, int token_id) {
+    std::string query = "INSERT INTO client_token_usage (client_id, token_id) VALUES (" +
+                        std::to_string(client_id) + ", " + std::to_string(token_id) +
+                        ") "
+                        "ON CONFLICT(client_id, token_id) "
+                        "DO UPDATE SET last_used_at = CURRENT_TIMESTAMP";
+    SqliteDatabase::instance().execute(query);
+}
+
+void SchedulerDatabase::update_job_status(int job_id, const std::string& status) {
+    std::string query = "UPDATE jobs SET status = '" + status +
+                        "', updated_at = CURRENT_TIMESTAMP WHERE id = " + std::to_string(job_id) +
+                        ";";
+    SqliteDatabase::instance().execute(query);
+}
+
+void SchedulerDatabase::save_job_result(int job_id,
+                                        bool success,
+                                        const std::string& message,
+                                        const std::string& artifact_url) {
+    std::string query =
+        "INSERT OR REPLACE INTO job_results (job_id, success, message, artifact_url) "
+        "VALUES (" +
+        std::to_string(job_id) + ", " + std::to_string(success ? 1 : 0) + ", '" + message + "', '" +
+        artifact_url + "')";
+    SqliteDatabase::instance().execute(query);
+}
+
+int token_exists_cb(void* data, int argc, char** argv, char** col_name) {
+    int* count = static_cast<int*>(data);
+    *count = atoi(argv[0]);
+    return 0;
+}
+
+int token_id_cb(void* data, int argc, char** argv, char** col_name) {
+    int* id = static_cast<int*>(data);
+    *id = atoi(argv[0]);
     return 0;
 }

@@ -5,7 +5,7 @@
 namespace DJS {
 class Logger {
   private:
-    static void Log(const std::string& message) { std::cout << message << "\n"; }
+    static void Log(const std::string& message) { std::cout << message << std::endl; }
 
   public:
     static void Debug(const std::string& message) { Logger::Log("[DEBUG]: " + message); }
