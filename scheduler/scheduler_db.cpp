@@ -1,8 +1,14 @@
 #include "scheduler_db.h"
 #include "logger.h"
 #include "sqlite_db.hpp"
+#include <cstdint>
+#include <map>
 
 using Logger = DJS::Logger;
+
+int string_cb(void* data, int argc, char** argv, char** col_name);
+int int64_cb(void* data, int argc, char** argv, char** col_name);
+int avg_duration_cb(void* data, int argc, char** argv, char** col_name);
 
 SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
     // create client table
@@ -68,6 +74,20 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
                                  "FOREIGN KEY (job_id) REFERENCES jobs(id)"
                                  ");";
     SqliteDatabase::instance().execute(create_results);
+
+    std::string create_timing = "CREATE TABLE IF NOT EXISTS job_type_timing ("
+                                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                                "job_type TEXT NOT NULL, "
+                                "duration_ms INTEGER NOT NULL, "
+                                "recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                                ");";
+    SqliteDatabase::instance().execute(create_timing);
+
+    std::string create_starts = "CREATE TABLE IF NOT EXISTS job_starts ("
+                                "job_id INTEGER PRIMARY KEY, "
+                                "started_at TEXT NOT NULL"
+                                ");";
+    SqliteDatabase::instance().execute(create_starts);
 
     std::string create_metrics = "CREATE TABLE IF NOT EXISTS worker_metrics ("
                                  "worker_id INTEGER PRIMARY KEY, "
@@ -241,6 +261,71 @@ void SchedulerDatabase::save_worker_metrics(int worker_id,
         std::to_string(rx_bytes_per_sec) + ", " + std::to_string(tx_bytes_per_sec) + ", " +
         std::to_string(load_avg_1m) + ", " + std::to_string(active_jobs) + ")";
     SqliteDatabase::instance().execute(query);
+}
+
+void SchedulerDatabase::record_job_started_at(int job_id) {
+    std::string query = "INSERT OR REPLACE INTO job_starts (job_id, started_at) "
+                        "VALUES (" +
+                        std::to_string(job_id) + ", CURRENT_TIMESTAMP)";
+    SqliteDatabase::instance().execute(query);
+}
+
+std::string SchedulerDatabase::get_job_started_at(int job_id) {
+    std::string query =
+        "SELECT started_at FROM job_starts WHERE job_id = " + std::to_string(job_id);
+    std::string result;
+    SqliteDatabase::instance().execute(query, string_cb, &result);
+    return result;
+}
+
+int64_t SchedulerDatabase::compute_duration_ms(const std::string& started_at) {
+    std::string query =
+        "SELECT CAST((julianday('now') - julianday('" + started_at + "')) * 86400000 AS INTEGER)";
+    int64_t result = 0;
+    SqliteDatabase::instance().execute(query, int64_cb, &result);
+    return result;
+}
+
+void SchedulerDatabase::save_job_timing(const std::string& job_type, int64_t duration_ms) {
+    std::string query = "INSERT INTO job_type_timing (job_type, duration_ms) VALUES ('" + job_type +
+                        "', " + std::to_string(duration_ms) + ")";
+    SqliteDatabase::instance().execute(query);
+
+    std::string cleanup = "DELETE FROM job_type_timing WHERE id NOT IN ("
+                          "SELECT id FROM job_type_timing WHERE job_type = '" +
+                          job_type +
+                          "' ORDER BY recorded_at DESC LIMIT 10) "
+                          "AND job_type = '" +
+                          job_type + "'";
+    SqliteDatabase::instance().execute(cleanup);
+}
+
+std::map<std::string, double> SchedulerDatabase::get_avg_durations() {
+    std::string query = "SELECT job_type, AVG(duration_ms) FROM job_type_timing GROUP BY job_type";
+    std::map<std::string, double> result;
+    SqliteDatabase::instance().execute(query, avg_duration_cb, &result);
+    return result;
+}
+
+int string_cb(void* data, int argc, char** argv, char** col_name) {
+    auto* str = static_cast<std::string*>(data);
+    if (argc >= 1 && argv[0])
+        *str = argv[0];
+    return 0;
+}
+
+int int64_cb(void* data, int argc, char** argv, char** col_name) {
+    auto* val = static_cast<int64_t*>(data);
+    if (argc >= 1 && argv[0])
+        *val = std::stoll(argv[0]);
+    return 0;
+}
+
+int avg_duration_cb(void* data, int argc, char** argv, char** col_name) {
+    auto* map = static_cast<std::map<std::string, double>*>(data);
+    if (argc >= 2 && argv[0] && argv[1])
+        (*map)[argv[0]] = std::stod(argv[1]);
+    return 0;
 }
 
 int token_exists_cb(void* data, int argc, char** argv, char** col_name) {

@@ -1,5 +1,6 @@
 #pragma once
 #include "database.h"
+#include <map>
 #include <string>
 
 struct Worker {
@@ -81,4 +82,10 @@ class SchedulerDatabase : public Database {
                              double tx_bytes_per_sec,
                              double load_avg_1m,
                              int active_jobs);
+
+    void record_job_started_at(int job_id);
+    std::string get_job_started_at(int job_id);
+    int64_t compute_duration_ms(const std::string& started_at);
+    void save_job_timing(const std::string& job_type, int64_t duration_ms);
+    std::map<std::string, double> get_avg_durations();
 };

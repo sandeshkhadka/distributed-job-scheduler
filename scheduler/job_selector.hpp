@@ -8,5 +8,6 @@ class JobSelector {
   public:
     virtual ~JobSelector() = default;
     virtual std::string name() const = 0;
-    virtual Job select_job(const Worker& worker, const std::vector<Job>& jobs) = 0;
+    virtual Job
+    select_job(const Worker& worker, const std::vector<Job>& jobs, SchedulerDatabase& db) = 0;
 };

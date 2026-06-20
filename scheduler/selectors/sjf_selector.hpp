@@ -2,7 +2,7 @@
 #include "job_selector.hpp"
 #include "scheduler_db.h"
 
-class FCFSSelector : public JobSelector {
+class SJFSelector : public JobSelector {
   public:
     std::string name() const override;
     Job

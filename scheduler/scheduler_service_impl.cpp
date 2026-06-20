@@ -127,7 +127,7 @@ grpc::Status SchedulerServiceImpl::GetJob(grpc::ServerContext* context,
     }
 
     std::vector<Job> jobs = db.get_jobs_by_status("not started");
-    Job selected_job = job_selector_->select_job(worker, jobs);
+    Job selected_job = job_selector_->select_job(worker, jobs, db);
 
     if (selected_job.id == 0) {
         return grpc::Status(grpc::NOT_FOUND, "No jobs available");
@@ -186,6 +186,19 @@ grpc::Status SchedulerServiceImpl::ReportJobResult(grpc::ServerContext* context,
     db.update_job_status(job_id, status);
     db.save_job_result(job_id, success, message, artifact_url);
 
+    if (success) {
+        std::string started_at = db.get_job_started_at(job_id);
+        if (!started_at.empty()) {
+            int64_t ms = db.compute_duration_ms(started_at);
+            if (ms > 0) {
+                Job j = db.get_job_by_id(job_id);
+                db.save_job_timing(j.job_type, ms);
+                Logger::Info("Job " + std::to_string(job_id) + " type=" + j.job_type +
+                             " duration=" + std::to_string(ms) + "ms");
+            }
+        }
+    }
+
     Logger::Info("Job " + std::to_string(job_id) + " " + status);
 
     reply->set_ok(true);
@@ -218,6 +231,7 @@ grpc::Status SchedulerServiceImpl::ReportJobStarted(grpc::ServerContext* context
 
     int job_id = request->job_id();
     db.update_job_status(job_id, "started");
+    db.record_job_started_at(job_id);
     Logger::Info("Job " + std::to_string(job_id) + " started by worker " +
                  std::to_string(request->worker_id()));
 

@@ -2,7 +2,9 @@
 
 std::string FCFSSelector::name() const { return "fcfs"; }
 
-Job FCFSSelector::select_job(const Worker& worker, const std::vector<Job>& jobs) {
+Job FCFSSelector::select_job(const Worker& worker,
+                             const std::vector<Job>& jobs,
+                             SchedulerDatabase& db) {
     const Job* oldest = nullptr;
     for (const auto& job : jobs) {
         if (job.status != "not started")

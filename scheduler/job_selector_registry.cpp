@@ -1,7 +1,11 @@
 #include "job_selector_registry.hpp"
 #include "selectors/fcfs_selector.hpp"
+#include "selectors/sjf_selector.hpp"
 
-void JobSelectorRegistry::init_all() { register_selector("fcfs", make_selector<FCFSSelector>); }
+void JobSelectorRegistry::init_all() {
+    register_selector("fcfs", make_selector<FCFSSelector>);
+    register_selector("sjf", make_selector<SJFSelector>);
+}
 
 void JobSelectorRegistry::register_selector(const std::string& name,
                                             std::unique_ptr<JobSelector> (*creator)()) {
