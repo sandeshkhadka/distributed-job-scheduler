@@ -124,14 +124,8 @@ grpc::Status SchedulerServiceImpl::GetJob(grpc::ServerContext* context,
         return grpc::Status(grpc::NOT_FOUND, "Worker not found");
     }
 
-    std::vector<Job> jobs;
-    jobs = db.get_worker_jobs(worker_id);
-    Job selected_job = select_job(worker, jobs);
-
-    if (selected_job.id == 0) {
-        jobs = db.get_jobs_by_status("not started");
-        selected_job = select_job(worker, jobs);
-    }
+    std::vector<Job> jobs = db.get_jobs_by_status("not started");
+    Job selected_job = job_selector_->select_job(worker, jobs);
 
     if (selected_job.id == 0) {
         return grpc::Status(grpc::NOT_FOUND, "No jobs available");
@@ -256,13 +250,4 @@ grpc::Status SchedulerServiceImpl::ReportWorkerMetrics(grpc::ServerContext* cont
 
     reply->set_accepted(true);
     return grpc::Status::OK;
-}
-
-Job SchedulerServiceImpl::select_job(const Worker& worker, const std::vector<Job>& jobs) {
-    for (auto job : jobs) {
-        if (job.status == "not started") {
-            return job;
-        }
-    }
-    return Job{};
 }
