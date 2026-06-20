@@ -48,7 +48,9 @@ check_auth(grpc::ServerContext* context, SchedulerDatabase& db, const std::strin
     if (raw.substr(0, 7) != "Bearer ") {
         return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "bad authorization format");
     }
-    if (!db.is_token_valid(raw.substr(7), allowed_type)) {
+    std::string token = raw.substr(7);
+    bool valid = db.is_token_valid(token, allowed_type);
+    if (!valid) {
         return grpc::Status(grpc::StatusCode::PERMISSION_DENIED, "invalid or revoked token");
     }
     return grpc::Status::OK;

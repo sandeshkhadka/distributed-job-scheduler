@@ -22,6 +22,7 @@ SqliteDatabase::SqliteDatabase(const std::string& db_path) {
     }
     sqlite3_busy_timeout(_db, 5000);
     execute("PRAGMA journal_mode=WAL;", nullptr);
+    execute("PRAGMA wal_checkpoint(TRUNCATE);", nullptr);
 }
 sqlite3_int64 SqliteDatabase::last_insert_rowid() { return sqlite3_last_insert_rowid(_db); }
 

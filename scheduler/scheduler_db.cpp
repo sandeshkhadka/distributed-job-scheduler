@@ -1,5 +1,8 @@
 #include "scheduler_db.h"
+#include "logger.h"
 #include "sqlite_db.hpp"
+
+using Logger = DJS::Logger;
 
 SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
     // create client table
@@ -169,7 +172,12 @@ bool SchedulerDatabase::is_token_valid(const std::string& token, const std::stri
                         "' "
                         "AND active = 1";
     int count = 0;
-    SqliteDatabase::instance().execute(query, token_exists_cb, &count);
+    try {
+        SqliteDatabase::instance().execute(query, token_exists_cb, &count);
+    } catch (const std::exception& e) {
+        Logger::Error("is_token_valid query failed: " + std::string(e.what()));
+        return false;
+    }
     return count > 0;
 }
 
