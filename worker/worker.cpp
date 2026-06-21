@@ -12,6 +12,8 @@ using Logger = DJS::Logger;
 
 namespace {
 
+#define POLL_INTERVAL_SECS 60
+
 std::string serialize_params(const std::map<std::string, std::string>& params) {
     std::string result;
     for (const auto& [k, v] : params) {
@@ -114,7 +116,7 @@ int main(int argc, char* argv[]) {
 
         auto job = client.GetJob();
         if (!job) {
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+            std::this_thread::sleep_for(std::chrono::seconds(POLL_INTERVAL_SECS));
             continue;
         }
 
@@ -147,6 +149,8 @@ int main(int argc, char* argv[]) {
 
         Logger::Info("Job " + std::to_string(job->job_id) + " running as PID " +
                      std::to_string(handle.pid));
+
+        std::this_thread::sleep_for(std::chrono::seconds(POLL_INTERVAL_SECS));
     }
 
     return 0;
