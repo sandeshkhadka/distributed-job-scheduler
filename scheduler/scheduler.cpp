@@ -9,7 +9,7 @@ using Logger = DJS::Logger;
 int main() {
     JobSelectorRegistry registry;
     registry.init_all();
-    std::string algo = "sjf";
+    std::string algo = "adaptive";
 
     SchedulerServiceImpl service;
     service.job_selector_ = registry.create(algo);

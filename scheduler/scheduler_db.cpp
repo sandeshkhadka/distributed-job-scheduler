@@ -10,6 +10,7 @@ using Logger = DJS::Logger;
 
 int int64_cb(void* data, int argc, char** argv, char** col_name);
 int avg_duration_cb(void* data, int argc, char** argv, char** col_name);
+int avg_spikes_cb(void* data, int argc, char** argv, char** col_name);
 
 SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
     // create client table
@@ -365,18 +366,29 @@ void SchedulerDatabase::save_job_analytics(int job_id,
     SqliteDatabase::instance().execute(cleanup);
 }
 
+std::map<std::string, JobTypeSpikes> SchedulerDatabase::get_avg_spikes() {
+    std::string query = "SELECT job_type, AVG(cpu_spike_percent), AVG(memory_spike_percent), "
+                        "COUNT(*) FROM job_runtime_analytics GROUP BY job_type";
+    std::map<std::string, JobTypeSpikes> result;
+    SqliteDatabase::instance().execute(query, avg_spikes_cb, &result);
+    return result;
+}
+
 std::optional<SchedulerDatabase::WorkerMetricsBrief>
 SchedulerDatabase::get_worker_latest_metrics(int worker_id) {
-    std::string query = "SELECT cpu_percent, memory_percent FROM worker_metrics "
+    std::string query = "SELECT cpu_percent, memory_percent, memory_used_mb, memory_total_mb "
+                        "FROM worker_metrics "
                         "WHERE worker_id = " +
                         std::to_string(worker_id);
     WorkerMetricsBrief m{};
     int found = 0;
     auto cb = [](void* data, int argc, char** argv, char**) -> int {
         auto* ctx = static_cast<std::pair<WorkerMetricsBrief*, int>*>(data);
-        if (argc >= 2 && argv[0] && argv[1]) {
+        if (argc >= 4 && argv[0] && argv[1] && argv[2] && argv[3]) {
             ctx->first->cpu_percent = std::stod(argv[0]);
             ctx->first->memory_percent = std::stod(argv[1]);
+            ctx->first->memory_used_mb = std::stod(argv[2]);
+            ctx->first->memory_total_mb = std::stod(argv[3]);
             ctx->second = 1;
         }
         return 0;
@@ -399,6 +411,13 @@ int avg_duration_cb(void* data, int argc, char** argv, char** col_name) {
     auto* map = static_cast<std::map<std::string, double>*>(data);
     if (argc >= 2 && argv[0] && argv[1])
         (*map)[argv[0]] = std::stod(argv[1]);
+    return 0;
+}
+
+int avg_spikes_cb(void* data, int argc, char** argv, char**) {
+    auto* map = static_cast<std::map<std::string, JobTypeSpikes>*>(data);
+    if (argc >= 4 && argv[0] && argv[1] && argv[2] && argv[3])
+        (*map)[argv[0]] = {std::stod(argv[1]), std::stod(argv[2]), std::stoi(argv[3])};
     return 0;
 }
 

@@ -44,6 +44,12 @@ struct JobSnapshot {
     double peak_memory_percent;
 };
 
+struct JobTypeSpikes {
+    double avg_cpu_spike;
+    double avg_memory_spike;
+    int sample_count;
+};
+
 int insert_worker_cb(void* data, int argc, char** argv, char** col_name);
 int get_worker_cb(void* data, int argc, char** argv, char** col_name);
 
@@ -97,6 +103,7 @@ class SchedulerDatabase : public Database {
 
     int64_t compute_duration_ms(const std::string& started_at);
     std::map<std::string, double> get_avg_durations();
+    std::map<std::string, JobTypeSpikes> get_avg_spikes();
 
     void record_job_snapshot(int job_id, double start_cpu, double start_memory);
     JobSnapshot get_job_snapshot(int job_id);
@@ -113,6 +120,8 @@ class SchedulerDatabase : public Database {
     struct WorkerMetricsBrief {
         double cpu_percent;
         double memory_percent;
+        double memory_used_mb;
+        double memory_total_mb;
     };
     std::optional<WorkerMetricsBrief> get_worker_latest_metrics(int worker_id);
 };
