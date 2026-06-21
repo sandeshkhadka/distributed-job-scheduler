@@ -64,11 +64,28 @@ file(GLOB_RECURSE EXECUTOR_SOURCES CONFIGURE_DEPENDS "worker/executors/*.cpp")
 add_library(executor_impl STATIC ${EXECUTOR_SOURCES})
 target_include_directories(executor_impl PUBLIC "${CMAKE_SOURCE_DIR}/worker")
 
+option(USE_PG "Use PostgreSQL backend (scheduler + admin)" OFF)
+
+if(USE_PG)
+  find_package(PostgreSQL REQUIRED)
+endif()
+
 # helper macro to add target
 macro(add_component NAME)
   file(GLOB_RECURSE _SOURCES CONFIGURE_DEPENDS "${NAME}/*.cpp")
   if ("${NAME}" STREQUAL "worker")
     list(FILTER _SOURCES EXCLUDE REGEX ".*/executors/.*")
+  endif()
+  if(USE_PG)
+    if("${NAME}" STREQUAL "scheduler")
+      list(FILTER _SOURCES EXCLUDE REGEX ".*/scheduler_db\\.cpp$")
+    elseif("${NAME}" STREQUAL "admin")
+      list(FILTER _SOURCES EXCLUDE REGEX ".*/admin_db\\.cpp$")
+    endif()
+  else()
+    if("${NAME}" STREQUAL "scheduler" OR "${NAME}" STREQUAL "admin")
+      list(FILTER _SOURCES EXCLUDE REGEX ".*/pg_.*\\.cpp$")
+    endif()
   endif()
   add_executable(${NAME} ${_SOURCES})
   target_include_directories(${NAME} PRIVATE
@@ -91,6 +108,18 @@ add_component(admin)
 
 # Wire executor_impl into worker
 target_link_libraries(worker PUBLIC executor_impl)
+
+if(USE_PG)
+  target_compile_definitions(scheduler PRIVATE USE_PG=1)
+  target_compile_definitions(admin PRIVATE USE_PG=1)
+  target_link_libraries(scheduler PRIVATE PostgreSQL::PostgreSQL)
+  target_link_libraries(admin PRIVATE PostgreSQL::PostgreSQL)
+  target_include_directories(admin PRIVATE "${CMAKE_SOURCE_DIR}/scheduler")
+  target_sources(admin PRIVATE "${CMAKE_SOURCE_DIR}/scheduler/pg_db.cpp")
+else()
+  target_compile_definitions(scheduler PRIVATE USE_PG=0)
+  target_compile_definitions(admin PRIVATE USE_PG=0)
+endif()
 
 # djs-executor: standalone binary for isolated job execution
 add_executable(djs-executor executor/main.cpp)

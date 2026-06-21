@@ -1,7 +1,6 @@
 #include "./scheduler_service_impl.h"
 #include "job_selector_registry.hpp"
 #include "logger.h"
-#include "scheduler_db.h"
 #include <grpcpp/grpcpp.h>
 
 using Logger = DJS::Logger;

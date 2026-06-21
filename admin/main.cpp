@@ -1,5 +1,11 @@
-#include "admin_db.hpp"
 #include "argparse.hpp"
+#if defined(USE_PG) && USE_PG
+#include "pg_admin_db.hpp"
+using AdminDb = PgAdminDatabase;
+#else
+#include "admin_db.hpp"
+using AdminDb = AdminDatabase;
+#endif
 #include <iostream>
 
 int main(int argc, char* argv[]) {
@@ -36,7 +42,7 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        AdminDatabase db;
+        AdminDb db;
 
         if (program.is_subcommand_used(gen_cmd)) {
             auto desc = gen_cmd.get<std::string>("--desc");

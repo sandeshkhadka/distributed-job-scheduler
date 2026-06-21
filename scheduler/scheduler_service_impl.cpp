@@ -1,6 +1,5 @@
 #include "scheduler_service_impl.h"
 #include "logger.h"
-#include "scheduler_db.h"
 #include <grpcpp/support/status.h>
 #include <iostream>
 #include <optional>
@@ -40,7 +39,7 @@ void deserialize_params(const std::string& encoded,
 } // anonymous namespace
 
 static grpc::Status
-check_auth(grpc::ServerContext* context, SchedulerDatabase& db, const std::string& allowed_type) {
+check_auth(grpc::ServerContext* context, ISchedulerDatabase& db, const std::string& allowed_type) {
     auto md = context->client_metadata().find("authorization");
     if (md == context->client_metadata().end()) {
         return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "missing authorization");

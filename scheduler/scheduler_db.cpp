@@ -374,8 +374,7 @@ std::map<std::string, JobTypeSpikes> SchedulerDatabase::get_avg_spikes() {
     return result;
 }
 
-std::optional<SchedulerDatabase::WorkerMetricsBrief>
-SchedulerDatabase::get_worker_latest_metrics(int worker_id) {
+std::optional<WorkerMetricsBrief> SchedulerDatabase::get_worker_latest_metrics(int worker_id) {
     std::string query = "SELECT cpu_percent, memory_percent, memory_used_mb, memory_total_mb "
                         "FROM worker_metrics "
                         "WHERE worker_id = " +

@@ -4,14 +4,21 @@
 #include "job_selector_registry.hpp"
 #include "scheduler.grpc.pb.h"
 #include "scheduler.pb.h"
-#include "scheduler_db.h"
 #include <grpcpp/support/status.h>
 #include <memory>
 #include <string>
 
+#if defined(USE_PG) && USE_PG
+#include "pg_scheduler_db.hpp"
+using SchedulerDb = PgSchedulerDatabase;
+#else
+#include "scheduler_db.h"
+using SchedulerDb = SchedulerDatabase;
+#endif
+
 class SchedulerServiceImpl final : public djs::SchedulerService::Service {
   private:
-    SchedulerDatabase db;
+    SchedulerDb db;
 
   public:
     std::unique_ptr<JobSelector> job_selector_;
