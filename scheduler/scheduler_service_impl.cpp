@@ -3,6 +3,7 @@
 #include "scheduler_db.h"
 #include <grpcpp/support/status.h>
 #include <iostream>
+#include <optional>
 
 using Logger = DJS::Logger;
 
@@ -126,6 +127,11 @@ grpc::Status SchedulerServiceImpl::GetJob(grpc::ServerContext* context,
         return grpc::Status(grpc::NOT_FOUND, "Worker not found");
     }
 
+    auto metrics = db.get_worker_latest_metrics(worker_id);
+    if (!metrics.has_value()) {
+        return grpc::Status(grpc::FAILED_PRECONDITION, "Worker has not reported metrics yet");
+    }
+
     std::vector<Job> jobs = db.get_jobs_by_status("not started");
     Job selected_job = job_selector_->select_job(worker, jobs, db);
 
@@ -187,14 +193,26 @@ grpc::Status SchedulerServiceImpl::ReportJobResult(grpc::ServerContext* context,
     db.save_job_result(job_id, success, message, artifact_url);
 
     if (success) {
-        std::string started_at = db.get_job_started_at(job_id);
-        if (!started_at.empty()) {
-            int64_t ms = db.compute_duration_ms(started_at);
+        auto snap = db.get_job_snapshot(job_id);
+        if (!snap.started_at.empty()) {
+            int64_t ms = db.compute_duration_ms(snap.started_at);
             if (ms > 0) {
                 Job j = db.get_job_by_id(job_id);
-                db.save_job_timing(j.job_type, ms);
+                double cpu_spike = snap.peak_cpu_percent - snap.start_cpu_percent;
+                double mem_spike = snap.peak_memory_percent - snap.start_memory_percent;
+                db.save_job_analytics(job_id,
+                                      j.job_type,
+                                      ms,
+                                      cpu_spike,
+                                      mem_spike,
+                                      snap.peak_cpu_percent,
+                                      snap.peak_memory_percent);
                 Logger::Info("Job " + std::to_string(job_id) + " type=" + j.job_type +
-                             " duration=" + std::to_string(ms) + "ms");
+                             " duration=" + std::to_string(ms) +
+                             "ms"
+                             " cpu_spike=" +
+                             std::to_string(cpu_spike) +
+                             "% mem_spike=" + std::to_string(mem_spike) + "%");
             }
         }
     }
@@ -230,10 +248,14 @@ grpc::Status SchedulerServiceImpl::ReportJobStarted(grpc::ServerContext* context
         return auth;
 
     int job_id = request->job_id();
+    int worker_id = request->worker_id();
     db.update_job_status(job_id, "started");
-    db.record_job_started_at(job_id);
+    auto m = db.get_worker_latest_metrics(worker_id);
+    double start_cpu = m.has_value() ? m->cpu_percent : 0;
+    double start_mem = m.has_value() ? m->memory_percent : 0;
+    db.record_job_snapshot(job_id, start_cpu, start_mem);
     Logger::Info("Job " + std::to_string(job_id) + " started by worker " +
-                 std::to_string(request->worker_id()));
+                 std::to_string(worker_id));
 
     reply->set_accepted(true);
     reply->set_message("started");
@@ -247,9 +269,13 @@ grpc::Status SchedulerServiceImpl::ReportWorkerMetrics(grpc::ServerContext* cont
     if (!auth.ok())
         return auth;
 
-    db.save_worker_metrics(request->worker_id(),
-                           request->cpu_percent(),
-                           request->memory_percent(),
+    int worker_id = request->worker_id();
+    double cpu = request->cpu_percent();
+    double mem = request->memory_percent();
+
+    db.save_worker_metrics(worker_id,
+                           cpu,
+                           mem,
                            request->memory_used_mb(),
                            request->memory_total_mb(),
                            request->disk_used_mb(),
@@ -260,9 +286,10 @@ grpc::Status SchedulerServiceImpl::ReportWorkerMetrics(grpc::ServerContext* cont
                            request->load_avg_1m(),
                            request->active_jobs());
 
-    Logger::Info("Worker " + std::to_string(request->worker_id()) +
-                 " metrics: cpu=" + std::to_string(request->cpu_percent()) +
-                 "% mem=" + std::to_string(request->memory_percent()) + "%");
+    db.update_worker_job_peaks(worker_id, cpu, mem);
+
+    Logger::Info("Worker " + std::to_string(worker_id) + " metrics: cpu=" + std::to_string(cpu) +
+                 "% mem=" + std::to_string(mem) + "%");
 
     reply->set_accepted(true);
     return grpc::Status::OK;

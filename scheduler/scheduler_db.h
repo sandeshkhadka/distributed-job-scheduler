@@ -1,6 +1,7 @@
 #pragma once
 #include "database.h"
 #include <map>
+#include <optional>
 #include <string>
 
 struct Worker {
@@ -35,11 +36,22 @@ struct AuthToken {
     std::string created_at;
 };
 
+struct JobSnapshot {
+    std::string started_at;
+    double start_cpu_percent;
+    double start_memory_percent;
+    double peak_cpu_percent;
+    double peak_memory_percent;
+};
+
 int insert_worker_cb(void* data, int argc, char** argv, char** col_name);
 int get_worker_cb(void* data, int argc, char** argv, char** col_name);
 
 int token_exists_cb(void* data, int argc, char** argv, char** col_name);
 int token_id_cb(void* data, int argc, char** argv, char** col_name);
+
+int int_vector_cb(void* data, int argc, char** argv, char** col_name);
+int job_snapshot_cb(void* data, int argc, char** argv, char** col_name);
 
 class SchedulerDatabase : public Database {
   public:
@@ -83,9 +95,24 @@ class SchedulerDatabase : public Database {
                              double load_avg_1m,
                              int active_jobs);
 
-    void record_job_started_at(int job_id);
-    std::string get_job_started_at(int job_id);
     int64_t compute_duration_ms(const std::string& started_at);
-    void save_job_timing(const std::string& job_type, int64_t duration_ms);
     std::map<std::string, double> get_avg_durations();
+
+    void record_job_snapshot(int job_id, double start_cpu, double start_memory);
+    JobSnapshot get_job_snapshot(int job_id);
+    void update_job_peak_metrics(int job_id, double cpu_percent, double memory_percent);
+    void update_worker_job_peaks(int worker_id, double cpu_percent, double memory_percent);
+    void save_job_analytics(int job_id,
+                            const std::string& job_type,
+                            int64_t duration_ms,
+                            double cpu_spike,
+                            double memory_spike,
+                            double peak_cpu,
+                            double peak_memory);
+
+    struct WorkerMetricsBrief {
+        double cpu_percent;
+        double memory_percent;
+    };
+    std::optional<WorkerMetricsBrief> get_worker_latest_metrics(int worker_id);
 };

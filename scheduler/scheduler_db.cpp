@@ -3,10 +3,11 @@
 #include "sqlite_db.hpp"
 #include <cstdint>
 #include <map>
+#include <optional>
+#include <vector>
 
 using Logger = DJS::Logger;
 
-int string_cb(void* data, int argc, char** argv, char** col_name);
 int int64_cb(void* data, int argc, char** argv, char** col_name);
 int avg_duration_cb(void* data, int argc, char** argv, char** col_name);
 
@@ -75,19 +76,28 @@ SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
                                  ");";
     SqliteDatabase::instance().execute(create_results);
 
-    std::string create_timing = "CREATE TABLE IF NOT EXISTS job_type_timing ("
-                                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                                "job_type TEXT NOT NULL, "
-                                "duration_ms INTEGER NOT NULL, "
-                                "recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                                ");";
-    SqliteDatabase::instance().execute(create_timing);
+    std::string create_snapshots = "CREATE TABLE IF NOT EXISTS job_runtime_snapshots ("
+                                   "job_id INTEGER PRIMARY KEY, "
+                                   "started_at TEXT NOT NULL, "
+                                   "start_cpu_percent REAL DEFAULT 0, "
+                                   "start_memory_percent REAL DEFAULT 0, "
+                                   "peak_cpu_percent REAL DEFAULT 0, "
+                                   "peak_memory_percent REAL DEFAULT 0"
+                                   ");";
+    SqliteDatabase::instance().execute(create_snapshots);
 
-    std::string create_starts = "CREATE TABLE IF NOT EXISTS job_starts ("
-                                "job_id INTEGER PRIMARY KEY, "
-                                "started_at TEXT NOT NULL"
-                                ");";
-    SqliteDatabase::instance().execute(create_starts);
+    std::string create_analytics = "CREATE TABLE IF NOT EXISTS job_runtime_analytics ("
+                                   "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                                   "job_id INTEGER NOT NULL, "
+                                   "job_type TEXT NOT NULL, "
+                                   "duration_ms INTEGER NOT NULL, "
+                                   "cpu_spike_percent REAL DEFAULT 0, "
+                                   "memory_spike_percent REAL DEFAULT 0, "
+                                   "peak_cpu_percent REAL DEFAULT 0, "
+                                   "peak_memory_percent REAL DEFAULT 0, "
+                                   "recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                                   ");";
+    SqliteDatabase::instance().execute(create_analytics);
 
     std::string create_metrics = "CREATE TABLE IF NOT EXISTS worker_metrics ("
                                  "worker_id INTEGER PRIMARY KEY, "
@@ -263,21 +273,6 @@ void SchedulerDatabase::save_worker_metrics(int worker_id,
     SqliteDatabase::instance().execute(query);
 }
 
-void SchedulerDatabase::record_job_started_at(int job_id) {
-    std::string query = "INSERT OR REPLACE INTO job_starts (job_id, started_at) "
-                        "VALUES (" +
-                        std::to_string(job_id) + ", CURRENT_TIMESTAMP)";
-    SqliteDatabase::instance().execute(query);
-}
-
-std::string SchedulerDatabase::get_job_started_at(int job_id) {
-    std::string query =
-        "SELECT started_at FROM job_starts WHERE job_id = " + std::to_string(job_id);
-    std::string result;
-    SqliteDatabase::instance().execute(query, string_cb, &result);
-    return result;
-}
-
 int64_t SchedulerDatabase::compute_duration_ms(const std::string& started_at) {
     std::string query =
         "SELECT CAST((julianday('now') - julianday('" + started_at + "')) * 86400000 AS INTEGER)";
@@ -286,13 +281,83 @@ int64_t SchedulerDatabase::compute_duration_ms(const std::string& started_at) {
     return result;
 }
 
-void SchedulerDatabase::save_job_timing(const std::string& job_type, int64_t duration_ms) {
-    std::string query = "INSERT INTO job_type_timing (job_type, duration_ms) VALUES ('" + job_type +
-                        "', " + std::to_string(duration_ms) + ")";
+std::map<std::string, double> SchedulerDatabase::get_avg_durations() {
+    std::string query =
+        "SELECT job_type, AVG(duration_ms) FROM job_runtime_analytics GROUP BY job_type";
+    std::map<std::string, double> result;
+    SqliteDatabase::instance().execute(query, avg_duration_cb, &result);
+    return result;
+}
+
+void SchedulerDatabase::record_job_snapshot(int job_id, double start_cpu, double start_memory) {
+    std::string query = "INSERT OR REPLACE INTO job_runtime_snapshots "
+                        "(job_id, started_at, start_cpu_percent, start_memory_percent, "
+                        "peak_cpu_percent, peak_memory_percent) "
+                        "VALUES (" +
+                        std::to_string(job_id) + ", CURRENT_TIMESTAMP, " +
+                        std::to_string(start_cpu) + ", " + std::to_string(start_memory) + ", " +
+                        std::to_string(start_cpu) + ", " + std::to_string(start_memory) + ")";
+    SqliteDatabase::instance().execute(query);
+}
+
+JobSnapshot SchedulerDatabase::get_job_snapshot(int job_id) {
+    std::string query = "SELECT started_at, start_cpu_percent, start_memory_percent, "
+                        "peak_cpu_percent, peak_memory_percent "
+                        "FROM job_runtime_snapshots WHERE job_id = " +
+                        std::to_string(job_id);
+    JobSnapshot snap{};
+    SqliteDatabase::instance().execute(query, job_snapshot_cb, &snap);
+    return snap;
+}
+
+void SchedulerDatabase::update_job_peak_metrics(int job_id,
+                                                double cpu_percent,
+                                                double memory_percent) {
+    std::string query = "UPDATE job_runtime_snapshots SET "
+                        "peak_cpu_percent = MAX(peak_cpu_percent, " +
+                        std::to_string(cpu_percent) +
+                        "), "
+                        "peak_memory_percent = MAX(peak_memory_percent, " +
+                        std::to_string(memory_percent) +
+                        ") "
+                        "WHERE job_id = " +
+                        std::to_string(job_id);
+    SqliteDatabase::instance().execute(query);
+}
+
+void SchedulerDatabase::update_worker_job_peaks(int worker_id,
+                                                double cpu_percent,
+                                                double memory_percent) {
+    std::string query = "SELECT j.id FROM jobs j "
+                        "JOIN job_worker jw ON j.id = jw.job_id "
+                        "WHERE jw.worker_id = " +
+                        std::to_string(worker_id) + " AND j.status IN ('started', 'ongoing')";
+    std::vector<int> job_ids;
+    SqliteDatabase::instance().execute(query, int_vector_cb, &job_ids);
+    for (int jid : job_ids) {
+        update_job_peak_metrics(jid, cpu_percent, memory_percent);
+    }
+}
+
+void SchedulerDatabase::save_job_analytics(int job_id,
+                                           const std::string& job_type,
+                                           int64_t duration_ms,
+                                           double cpu_spike,
+                                           double memory_spike,
+                                           double peak_cpu,
+                                           double peak_memory) {
+    std::string query = "INSERT INTO job_runtime_analytics "
+                        "(job_id, job_type, duration_ms, cpu_spike_percent, memory_spike_percent, "
+                        "peak_cpu_percent, peak_memory_percent) "
+                        "VALUES (" +
+                        std::to_string(job_id) + ", '" + job_type + "', " +
+                        std::to_string(duration_ms) + ", " + std::to_string(cpu_spike) + ", " +
+                        std::to_string(memory_spike) + ", " + std::to_string(peak_cpu) + ", " +
+                        std::to_string(peak_memory) + ")";
     SqliteDatabase::instance().execute(query);
 
-    std::string cleanup = "DELETE FROM job_type_timing WHERE id NOT IN ("
-                          "SELECT id FROM job_type_timing WHERE job_type = '" +
+    std::string cleanup = "DELETE FROM job_runtime_analytics WHERE id NOT IN ("
+                          "SELECT id FROM job_runtime_analytics WHERE job_type = '" +
                           job_type +
                           "' ORDER BY recorded_at DESC LIMIT 10) "
                           "AND job_type = '" +
@@ -300,18 +365,27 @@ void SchedulerDatabase::save_job_timing(const std::string& job_type, int64_t dur
     SqliteDatabase::instance().execute(cleanup);
 }
 
-std::map<std::string, double> SchedulerDatabase::get_avg_durations() {
-    std::string query = "SELECT job_type, AVG(duration_ms) FROM job_type_timing GROUP BY job_type";
-    std::map<std::string, double> result;
-    SqliteDatabase::instance().execute(query, avg_duration_cb, &result);
-    return result;
-}
-
-int string_cb(void* data, int argc, char** argv, char** col_name) {
-    auto* str = static_cast<std::string*>(data);
-    if (argc >= 1 && argv[0])
-        *str = argv[0];
-    return 0;
+std::optional<SchedulerDatabase::WorkerMetricsBrief>
+SchedulerDatabase::get_worker_latest_metrics(int worker_id) {
+    std::string query = "SELECT cpu_percent, memory_percent FROM worker_metrics "
+                        "WHERE worker_id = " +
+                        std::to_string(worker_id);
+    WorkerMetricsBrief m{};
+    int found = 0;
+    auto cb = [](void* data, int argc, char** argv, char**) -> int {
+        auto* ctx = static_cast<std::pair<WorkerMetricsBrief*, int>*>(data);
+        if (argc >= 2 && argv[0] && argv[1]) {
+            ctx->first->cpu_percent = std::stod(argv[0]);
+            ctx->first->memory_percent = std::stod(argv[1]);
+            ctx->second = 1;
+        }
+        return 0;
+    };
+    std::pair<WorkerMetricsBrief*, int> ctx{&m, 0};
+    SqliteDatabase::instance().execute(query, cb, &ctx);
+    if (ctx.second)
+        return m;
+    return std::nullopt;
 }
 
 int int64_cb(void* data, int argc, char** argv, char** col_name) {
@@ -325,6 +399,28 @@ int avg_duration_cb(void* data, int argc, char** argv, char** col_name) {
     auto* map = static_cast<std::map<std::string, double>*>(data);
     if (argc >= 2 && argv[0] && argv[1])
         (*map)[argv[0]] = std::stod(argv[1]);
+    return 0;
+}
+
+int int_vector_cb(void* data, int argc, char** argv, char**) {
+    auto* vec = static_cast<std::vector<int>*>(data);
+    if (argc >= 1 && argv[0])
+        vec->push_back(std::stoi(argv[0]));
+    return 0;
+}
+
+int job_snapshot_cb(void* data, int argc, char** argv, char**) {
+    auto* snap = static_cast<JobSnapshot*>(data);
+    if (argc >= 1 && argv[0])
+        snap->started_at = argv[0];
+    if (argc >= 2 && argv[1])
+        snap->start_cpu_percent = std::stod(argv[1]);
+    if (argc >= 3 && argv[2])
+        snap->start_memory_percent = std::stod(argv[2]);
+    if (argc >= 4 && argv[3])
+        snap->peak_cpu_percent = std::stod(argv[3]);
+    if (argc >= 5 && argv[4])
+        snap->peak_memory_percent = std::stod(argv[4]);
     return 0;
 }
 
