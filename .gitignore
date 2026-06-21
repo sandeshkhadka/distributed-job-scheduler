@@ -4,3 +4,4 @@ build/
 .cache/
 *.db*
 /.env
+worker/ebpf/bpf/vmlinux.h
