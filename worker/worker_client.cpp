@@ -175,6 +175,27 @@ void WorkerClient::report_worker_metrics(const WorkerMetricsData& metrics) {
     }
 }
 
+void WorkerClient::report_ebpf_metrics(int job_id,
+                                       const std::vector<djs::JobEbpfMetrics>& metrics) {
+    if (metrics.empty())
+        return;
+
+    djs::ReportJobEbpfMetricsRequest request;
+    request.set_worker_id(this->worker_id);
+    for (const auto& m : metrics) {
+        *request.add_metrics() = m;
+    }
+
+    djs::ReportJobEbpfMetricsResponse reply;
+    grpc::ClientContext context;
+    add_auth(context);
+
+    grpc::Status status = stub_->ReportJobEbpfMetrics(&context, request, &reply);
+    if (!status.ok()) {
+        Logger::Error("Failed to report eBPF metrics: " + status.error_message());
+    }
+}
+
 void WorkerClient::report_pending_results() {
     auto pending = db.get_unposted_results();
     if (pending.empty())
