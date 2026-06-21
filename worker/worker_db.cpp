@@ -137,6 +137,21 @@ void WorkerDatabase::remove_received_job(int job_id) {
     SqliteDatabase::instance().execute(query);
 }
 
+int count_active_jobs_cb(void* data, int argc, char** argv, char** col_name) {
+    int* count = static_cast<int*>(data);
+    *count = atoi(argv[0]);
+    return 0;
+}
+
+int WorkerDatabase::count_active_jobs() {
+    int count = 0;
+    SqliteDatabase::instance().execute(
+        "SELECT COUNT(*) FROM received_jobs WHERE status NOT IN ('completed', 'failed')",
+        count_active_jobs_cb,
+        &count);
+    return count;
+}
+
 int received_job_list_cb(void* data, int argc, char** argv, char** col_name) {
     auto* records = static_cast<std::vector<ReceivedJobRecord>*>(data);
     ReceivedJobRecord r;

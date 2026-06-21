@@ -30,6 +30,7 @@ int get_registered_worker_id_cb(void* data, int argc, char** argv, char** col_na
 int get_token_cb(void* data, int argc, char** argv, char** col_name);
 int job_result_list_cb(void* data, int argc, char** argv, char** col_name);
 int received_job_list_cb(void* data, int argc, char** argv, char** col_name);
+int count_active_jobs_cb(void* data, int argc, char** argv, char** col_name);
 
 class WorkerDatabase : public Database {
   public:
@@ -52,4 +53,5 @@ class WorkerDatabase : public Database {
     void update_received_job_status(int job_id, const std::string& status);
     std::vector<ReceivedJobRecord> get_pending_jobs();
     void remove_received_job(int job_id);
+    int count_active_jobs();
 };

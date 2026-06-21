@@ -82,8 +82,11 @@ endmacro()
 
 # Targets
 add_component(scheduler)
+set_target_properties(scheduler PROPERTIES OUTPUT_NAME "djs-sc")
 add_component(cli)
+set_target_properties(cli PROPERTIES OUTPUT_NAME "djs-cli")
 add_component(worker)
+set_target_properties(worker PROPERTIES OUTPUT_NAME "djs-wk")
 add_component(admin)
 
 # Wire executor_impl into worker

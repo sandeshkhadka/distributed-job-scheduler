@@ -1,5 +1,6 @@
 #include "argparse.hpp"
 #include "job_orchestrator.hpp"
+#include "metrics_collector.hpp"
 #include "worker_client.hpp"
 #include <chrono>
 #include <grpcpp/grpcpp.h>
@@ -10,6 +11,8 @@
 using Logger = DJS::Logger;
 
 namespace {
+
+#define POLL_INTERVAL_SECS 60
 
 std::string serialize_params(const std::map<std::string, std::string>& params) {
     std::string result;
@@ -84,10 +87,13 @@ int main(int argc, char* argv[]) {
 
     recover_pending_jobs(client, client.db);
 
-    std::string executor_path;
-    try {
-        executor_path = program.get<std::string>("--executor");
-    } catch (const std::logic_error&) {
+    std::string executor_path = program.get<std::string>("--executor");
+    if (executor_path == "djs-executor") {
+        std::string self = argv[0];
+        auto slash = self.rfind('/');
+        if (slash != std::string::npos) {
+            executor_path = self.substr(0, slash + 1) + "djs-executor";
+        }
     }
 
     JobOrchestrator orchestrator;
@@ -99,12 +105,18 @@ int main(int argc, char* argv[]) {
                      result.message);
     };
 
+    MetricsCollector metrics_collector;
+    metrics_collector.collect();
+
     while (true) {
         client.report_pending_results();
 
+        auto metrics = metrics_collector.collect();
+        client.report_worker_metrics(metrics);
+
         auto job = client.GetJob();
         if (!job) {
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+            std::this_thread::sleep_for(std::chrono::seconds(POLL_INTERVAL_SECS));
             continue;
         }
 
@@ -137,6 +149,8 @@ int main(int argc, char* argv[]) {
 
         Logger::Info("Job " + std::to_string(job->job_id) + " running as PID " +
                      std::to_string(handle.pid));
+
+        std::this_thread::sleep_for(std::chrono::seconds(POLL_INTERVAL_SECS));
     }
 
     return 0;

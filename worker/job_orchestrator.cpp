@@ -2,8 +2,9 @@
 #include "logger.h"
 #include <cerrno>
 #include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
-#include <sstream>
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
@@ -24,9 +25,7 @@ JobOrchestrator::~JobOrchestrator() {
 std::string JobOrchestrator::make_cgroup(int job_id) {
     std::string path = "/sys/fs/cgroup/djs/jobs/" + std::to_string(job_id);
     std::string cmd = "mkdir -p " + path;
-    if (system(cmd.c_str()) != 0) {
-        Logger::Error("Failed to create cgroup: " + path);
-    }
+    system(cmd.c_str());
     return path;
 }
 
@@ -94,15 +93,19 @@ JobHandle JobOrchestrator::execute(int job_id,
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[1]);
 
-        unshare(CLONE_NEWPID | CLONE_NEWNS);
-
-        std::string cg_procs = cg_path + "/cgroup.procs";
-        std::ofstream cg(cg_procs);
-        if (cg.is_open())
-            cg << getpid();
-        cg.close();
-
-        execvp(executor_path.c_str(), const_cast<char* const*>(cargs.data()));
+        try {
+            execvp(executor_path.c_str(), const_cast<char* const*>(cargs.data()));
+        } catch (const std::exception& e) {
+            std::string msg = "{\"success\":false,\"message\":\"failed: ";
+            msg += e.what();
+            msg += "\"}";
+            write(STDOUT_FILENO, msg.data(), msg.size());
+            _exit(1);
+        }
+        std::string msg = "{\"success\":false,\"message\":\"failed: execvp: ";
+        msg += strerror(errno);
+        msg += "\"}";
+        write(STDOUT_FILENO, msg.data(), msg.size());
         _exit(1);
     }
 

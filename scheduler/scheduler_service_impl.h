@@ -1,24 +1,25 @@
 #pragma once
 
+#include "job_selector.hpp"
+#include "job_selector_registry.hpp"
 #include "scheduler.grpc.pb.h"
 #include "scheduler.pb.h"
 #include "scheduler_db.h"
 #include <grpcpp/support/status.h>
+#include <memory>
 #include <string>
-#include <unordered_map>
 
 class SchedulerServiceImpl final : public djs::SchedulerService::Service {
   private:
-    std::unordered_map<std::string, std::string> jobs;
-    std::unordered_map<std::string, std::string> active_workers;
     SchedulerDatabase db;
 
   public:
+    std::unique_ptr<JobSelector> job_selector_;
+
     grpc::Status SubmitJob(grpc::ServerContext* context,
                            const djs::SubmitJobRequest* request,
                            djs::SubmitJobReply* reply) override;
 
-    // Add the new RPC method override
     grpc::Status RegisterWorker(grpc::ServerContext* context,
                                 const djs::RegisterWorkerRequest* request,
                                 djs::RegisterWorkerReply* reply) override;
@@ -43,7 +44,7 @@ class SchedulerServiceImpl final : public djs::SchedulerService::Service {
                                   const djs::ReportJobStartedRequest* request,
                                   djs::ReportJobStartedResponse* reply) override;
 
-  private:
-    // The main function to select a job for a worker
-    Job select_job(const Worker& worker, const std::vector<Job>& jobs);
+    grpc::Status ReportWorkerMetrics(grpc::ServerContext* context,
+                                     const djs::WorkerMetrics* request,
+                                     djs::ReportWorkerMetricsResponse* reply) override;
 };

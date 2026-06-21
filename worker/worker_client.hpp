@@ -2,6 +2,7 @@
 
 #include "executors/job_executor.hpp"
 #include "logger.h"
+#include "metrics_collector.hpp"
 #include "scheduler.grpc.pb.h"
 #include "worker_db.hpp"
 #include <grpcpp/grpcpp.h>
@@ -37,4 +38,5 @@ class WorkerClient {
     bool report_job_started(int job_id);
     void store_job_result(int job_id, const JobResult& result);
     void report_pending_results();
+    void report_worker_metrics(const WorkerMetricsData& metrics);
 };
