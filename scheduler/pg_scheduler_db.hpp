@@ -56,4 +56,30 @@ class PgSchedulerDatabase : public ISchedulerDatabase {
     int insert_client(const Client& client);
     int get_token_id(const std::string& token);
     void record_client_token_usage(int client_id, int token_id);
+
+    void save_job_ebpf_metrics(int64_t job_id,
+                               int64_t worker_id,
+                               double timestamp,
+                               int64_t syscall_read_count,
+                               int64_t syscall_write_count,
+                               int64_t syscall_openat_count,
+                               int64_t io_read_bytes,
+                               int64_t io_write_bytes,
+                               int64_t net_tx_bytes,
+                               int64_t net_rx_bytes,
+                               int64_t cpu_usage_us,
+                               int64_t mem_current_bytes);
+    struct EbpfTimeseriesPoint {
+        double timestamp;
+        int64_t syscall_read_count;
+        int64_t syscall_write_count;
+        int64_t syscall_openat_count;
+        int64_t io_read_bytes;
+        int64_t io_write_bytes;
+        int64_t net_tx_bytes;
+        int64_t net_rx_bytes;
+        int64_t cpu_usage_us;
+        int64_t mem_current_bytes;
+    };
+    std::vector<EbpfTimeseriesPoint> get_job_timeseries(int job_id, int limit);
 };

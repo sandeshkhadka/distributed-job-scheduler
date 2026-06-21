@@ -93,3 +93,22 @@ CREATE TABLE IF NOT EXISTS job_runtime_analytics (
   peak_memory_percent DOUBLE PRECISION DEFAULT 0,
   recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS job_ebpf_metrics (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  worker_id INTEGER NOT NULL REFERENCES workers(id),
+  recorded_at DOUBLE PRECISION NOT NULL,
+  syscall_read_count BIGINT DEFAULT 0,
+  syscall_write_count BIGINT DEFAULT 0,
+  syscall_openat_count BIGINT DEFAULT 0,
+  io_read_bytes BIGINT DEFAULT 0,
+  io_write_bytes BIGINT DEFAULT 0,
+  net_tx_bytes BIGINT DEFAULT 0,
+  net_rx_bytes BIGINT DEFAULT 0,
+  net_conn_count INTEGER DEFAULT 0,
+  cpu_usage_us BIGINT DEFAULT 0,
+  mem_current_bytes BIGINT DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_ebpf_metrics_job_ts ON job_ebpf_metrics(job_id, recorded_at);

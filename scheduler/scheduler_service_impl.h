@@ -54,4 +54,12 @@ class SchedulerServiceImpl final : public djs::SchedulerService::Service {
     grpc::Status ReportWorkerMetrics(grpc::ServerContext* context,
                                      const djs::WorkerMetrics* request,
                                      djs::ReportWorkerMetricsResponse* reply) override;
+
+    grpc::Status ReportJobEbpfMetrics(grpc::ServerContext* context,
+                                      const djs::ReportJobEbpfMetricsRequest* request,
+                                      djs::ReportJobEbpfMetricsResponse* reply) override;
+
+    grpc::Status GetJobTimeseries(grpc::ServerContext* context,
+                                  const djs::GetJobTimeseriesRequest* request,
+                                  djs::GetJobTimeseriesResponse* reply) override;
 };

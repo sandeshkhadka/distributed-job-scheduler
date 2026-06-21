@@ -336,3 +336,73 @@ std::optional<WorkerMetricsBrief> PgSchedulerDatabase::get_worker_latest_metrics
         return m;
     return std::nullopt;
 }
+
+void PgSchedulerDatabase::save_job_ebpf_metrics(int64_t job_id,
+                                                int64_t worker_id,
+                                                double timestamp,
+                                                int64_t syscall_read_count,
+                                                int64_t syscall_write_count,
+                                                int64_t syscall_openat_count,
+                                                int64_t io_read_bytes,
+                                                int64_t io_write_bytes,
+                                                int64_t net_tx_bytes,
+                                                int64_t net_rx_bytes,
+                                                int64_t cpu_usage_us,
+                                                int64_t mem_current_bytes) {
+    std::string q = "INSERT INTO job_ebpf_metrics (job_id, worker_id, recorded_at, "
+                    "syscall_read_count, syscall_write_count, syscall_openat_count, "
+                    "io_read_bytes, io_write_bytes, net_tx_bytes, net_rx_bytes, "
+                    "cpu_usage_us, mem_current_bytes) VALUES (" +
+                    std::to_string(job_id) + ", " + std::to_string(worker_id) + ", " +
+                    std::to_string(timestamp) + ", " + std::to_string(syscall_read_count) + ", " +
+                    std::to_string(syscall_write_count) + ", " +
+                    std::to_string(syscall_openat_count) + ", " + std::to_string(io_read_bytes) +
+                    ", " + std::to_string(io_write_bytes) + ", " + std::to_string(net_tx_bytes) +
+                    ", " + std::to_string(net_rx_bytes) + ", " + std::to_string(cpu_usage_us) +
+                    ", " + std::to_string(mem_current_bytes) + ")";
+    PgDatabase::instance().execute(q);
+}
+
+namespace {
+
+int ebpf_timeseries_cb(void* data, int argc, char** argv, char**) {
+    auto* points = static_cast<std::vector<PgSchedulerDatabase::EbpfTimeseriesPoint>*>(data);
+    PgSchedulerDatabase::EbpfTimeseriesPoint p{};
+    if (argc >= 1 && argv[0])
+        p.timestamp = std::stod(argv[0]);
+    if (argc >= 2 && argv[1])
+        p.syscall_read_count = std::stoll(argv[1]);
+    if (argc >= 3 && argv[2])
+        p.syscall_write_count = std::stoll(argv[2]);
+    if (argc >= 4 && argv[3])
+        p.syscall_openat_count = std::stoll(argv[3]);
+    if (argc >= 5 && argv[4])
+        p.io_read_bytes = std::stoll(argv[4]);
+    if (argc >= 6 && argv[5])
+        p.io_write_bytes = std::stoll(argv[5]);
+    if (argc >= 7 && argv[6])
+        p.net_tx_bytes = std::stoll(argv[6]);
+    if (argc >= 8 && argv[7])
+        p.net_rx_bytes = std::stoll(argv[7]);
+    if (argc >= 9 && argv[8])
+        p.cpu_usage_us = std::stoll(argv[8]);
+    if (argc >= 10 && argv[9])
+        p.mem_current_bytes = std::stoll(argv[9]);
+    points->push_back(p);
+    return 0;
+}
+
+} // anonymous namespace
+
+std::vector<PgSchedulerDatabase::EbpfTimeseriesPoint>
+PgSchedulerDatabase::get_job_timeseries(int job_id, int limit) {
+    std::string q = "SELECT recorded_at, syscall_read_count, syscall_write_count, "
+                    "syscall_openat_count, io_read_bytes, io_write_bytes, "
+                    "net_tx_bytes, net_rx_bytes, cpu_usage_us, mem_current_bytes "
+                    "FROM job_ebpf_metrics WHERE job_id = " +
+                    std::to_string(job_id) + " ORDER BY recorded_at ASC LIMIT " +
+                    std::to_string(limit);
+    std::vector<EbpfTimeseriesPoint> points;
+    PgDatabase::instance().execute(q, ebpf_timeseries_cb, &points);
+    return points;
+}
