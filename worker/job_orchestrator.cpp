@@ -27,6 +27,14 @@ std::string JobOrchestrator::make_cgroup(int job_id) {
     std::string path = "/sys/fs/cgroup/djs/jobs/" + std::to_string(job_id);
     std::string cmd = "mkdir -p " + path;
     system(cmd.c_str());
+
+    // Enable controllers for child cgroups so job cgroups get
+    // memory.current, cpu.stat, io.stat, etc. (idempotent, ignores
+    // EBUSY if already enabled)
+    system("echo '+memory +cpu +io +pids' > /sys/fs/cgroup/djs/cgroup.subtree_control 2>/dev/null");
+    system("echo '+memory +cpu +io +pids' > /sys/fs/cgroup/djs/jobs/cgroup.subtree_control "
+           "2>/dev/null");
+
     return path;
 }
 
