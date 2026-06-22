@@ -4,11 +4,11 @@
 #include <cerrno>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <fstream>
+#include <fcntl.h>
 #include <linux/bpf.h>
-#include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -112,22 +112,44 @@ void EbpfMonitor::detach() {
 }
 
 int64_t EbpfMonitor::read_cgroup_u64(const std::string& file) {
-    std::ifstream f(file);
-    if (!f)
+    int fd = open(file.c_str(), O_RDONLY);
+    if (fd < 0)
         return 0;
-    int64_t val = 0;
-    f >> val;
-    if (f.fail()) {
-        f.clear();
-        f.seekg(0);
-        std::string line;
-        while (std::getline(f, line)) {
-            if (line.find("usage_usec") == 0) {
-                val = std::stoll(line.substr(11));
-                break;
-            }
+
+    char buf[4096];
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0)
+        return 0;
+    buf[n] = '\0';
+
+    std::string s(buf);
+
+    const char* ws = " \t\r\n";
+    auto first = s.find_first_not_of(ws);
+    if (first == std::string::npos)
+        return 0;
+    s.erase(0, first);
+
+    auto last = s.find_last_not_of(ws);
+    if (last < s.size() - 1)
+        s.erase(last + 1);
+
+    auto space = s.find(' ');
+    if (space != std::string::npos) {
+        if (s.substr(0, space) == "usage_usec") {
+            char* end = nullptr;
+            int64_t val = strtoll(s.c_str() + space + 1, &end, 10);
+            if (end != s.c_str() + space + 1)
+                return val;
         }
+        return 0;
     }
+
+    char* end = nullptr;
+    int64_t val = strtoll(s.c_str(), &end, 10);
+    if (end == s.c_str())
+        return 0;
     return val;
 }
 
