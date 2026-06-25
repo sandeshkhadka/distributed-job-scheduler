@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>djs-admin - Workers</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <h1 class="logo">djs</h1>
+    <nav>
+      <a href="/">Overview</a>
+      <a href="/workers" class="active">Workers</a>
+      <a href="/jobs">Jobs</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <h2>Workers</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Name</th><th>CPU</th><th>Memory</th><th>Disk</th><th>Load Avg</th><th>Jobs</th><th>Online</th></tr>
+      </thead>
+      <tbody>
+        <% workers.forEach(w => { %>
+        <tr>
+          <td><a href="/workers/<%= w.id %>"><%= w.id %></a></td>
+          <td><%= w.name %></td>
+          <td><%= w.cpu_percent !== null ? w.cpu_percent.toFixed(1) + '%' : '-' %></td>
+          <td><%= w.memory_percent !== null ? w.memory_percent.toFixed(1) + '% (' + w.memory_used_mb.toFixed(0) + '/' + w.memory_total_mb.toFixed(0) + ' MB)' : '-' %></td>
+          <td><%= w.disk_percent !== null ? w.disk_percent.toFixed(1) + '%' : '-' %></td>
+          <td><%= w.load_avg_1m !== null ? w.load_avg_1m.toFixed(2) : '-' %></td>
+          <td><%= w.job_count %></td>
+          <td><span class="badge <%= w.reported_at ? 'started' : 'failed' %>"><%= w.reported_at ? 'online' : 'offline' %></span></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "djs-dashboard",
+  "version": "1.0.0",
+  "description": "Admin web dashboard for distributed-job-scheduler",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "ejs": "^3.1.10",
+    "pg": "^8.13.0"
+  }
+}
