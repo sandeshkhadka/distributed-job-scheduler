@@ -5,3 +5,6 @@ build/
 *.db*
 /.env
 worker/ebpf/bpf/vmlinux.h
+node_modules/
+dashboard/node_modules/
+/dashboard/.env

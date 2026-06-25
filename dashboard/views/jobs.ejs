@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>djs-admin - Jobs</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <h1 class="logo">djs</h1>
+    <nav>
+      <a href="/">Overview</a>
+      <a href="/workers">Workers</a>
+      <a href="/jobs" class="active">Jobs</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <h2>Jobs</h2>
+    <div class="filters">
+      <a href="/jobs" class="btn <%= !current_status ? 'btn-active' : '' %>">All</a>
+      <a href="/jobs?status=not%20started" class="btn <%= current_status === 'not started' ? 'btn-active' : '' %>">Not Started</a>
+      <a href="/jobs?status=started" class="btn <%= current_status === 'started' ? 'btn-active' : '' %>">Started</a>
+      <a href="/jobs?status=completed" class="btn <%= current_status === 'completed' ? 'btn-active' : '' %>">Completed</a>
+      <a href="/jobs?status=failed" class="btn <%= current_status === 'failed' ? 'btn-active' : '' %>">Failed</a>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Worker</th><th>Result</th><th>Created</th></tr></thead>
+      <tbody>
+        <% jobs.forEach(j => { %>
+        <tr>
+          <td><a href="/jobs/<%= j.id %>"><%= j.id %></a></td>
+          <td><%= j.job_type %></td>
+          <td><span class="badge <%= j.status %>"><%= j.status %></span></td>
+          <td><%= j.worker_name || '-' %></td>
+          <td><%= j.success === null ? '-' : j.success ? '✓' : '✗' %></td>
+          <td><%= j.created_at %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

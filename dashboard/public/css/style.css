@@ -1,0 +1,83 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f1117; color: #e1e4e8;
+  display: flex; min-height: 100vh;
+}
+
+a { color: #4f7cff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ─── Sidebar ─── */
+.sidebar {
+  width: 200px; background: #161b22;
+  padding: 24px 0; flex-shrink: 0;
+  border-right: 1px solid #21262d;
+}
+.logo { font-size: 1.5rem; font-weight: 700; padding: 0 20px 24px; color: #4f7cff; letter-spacing: 1px; }
+.sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+.sidebar nav a {
+  padding: 10px 20px; color: #8b949e; font-size: 0.95rem;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar nav a:hover { background: #1c2333; color: #e1e4e8; text-decoration: none; }
+.sidebar nav a.active { background: #1c2333; color: #4f7cff; border-right: 2px solid #4f7cff; }
+
+/* ─── Main ─── */
+.main { flex: 1; padding: 32px; max-width: 1200px; }
+.main h2 { font-size: 1.4rem; font-weight: 600; margin-bottom: 20px; }
+.main h3 { font-size: 1.1rem; font-weight: 500; margin: 24px 0 12px; color: #8b949e; }
+
+/* ─── Cards ─── */
+.cards { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.card {
+  background: #161b22; border: 1px solid #21262d; border-radius: 8px;
+  padding: 20px 24px; min-width: 160px; flex: 1;
+}
+.card.small { min-width: 120px; padding: 14px 18px; }
+.card .num { display: block; font-size: 1.8rem; font-weight: 700; color: #e1e4e8; }
+.card.small .num { font-size: 1.3rem; }
+.card .label { display: block; font-size: 0.8rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+.card.small .label { margin-top: 2px; }
+
+/* ─── Tables ─── */
+table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+th { text-align: left; padding: 10px 12px; font-size: 0.8rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #21262d; }
+td { padding: 10px 12px; border-bottom: 1px solid #21262d; font-size: 0.9rem; }
+tr:hover td { background: #161b22; }
+
+/* ─── Badges ─── */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.badge.started, .badge.online { background: #1a3a2a; color: #22c55e; }
+.badge.ongoing, .badge.scheduled { background: #1a2a3a; color: #4f7cff; }
+.badge.completed { background: #1a3a2a; color: #22c55e; }
+.badge.failed { background: #3a1a1a; color: #ef4444; }
+.badge.not\ started { background: #2a2a1a; color: #f59e0b; }
+.badge.offline { background: #3a1a1a; color: #ef4444; }
+
+/* ─── Tabs ─── */
+.tabs { display: flex; gap: 0; border-bottom: 2px solid #21262d; margin-bottom: 20px; }
+.tab { padding: 10px 20px; background: none; border: none; color: #8b949e; font-size: 0.9rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s, border-color 0.15s; }
+.tab:hover { color: #e1e4e8; }
+.tab.active { color: #4f7cff; border-bottom-color: #4f7cff; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ─── Charts ─── */
+.chart-row { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+.chart-box { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 16px; flex: 1; min-width: 280px; }
+.chart-box canvas { max-height: 240px; }
+
+/* ─── Filters ─── */
+.filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.btn {
+  display: inline-block; padding: 6px 14px; border-radius: 6px;
+  background: #161b22; border: 1px solid #21262d; color: #8b949e;
+  font-size: 0.85rem; transition: background 0.15s, color 0.15s;
+}
+.btn:hover { background: #1c2333; color: #e1e4e8; text-decoration: none; }
+.btn-active { background: #1c2333; color: #4f7cff; border-color: #4f7cff; }
+
+.muted { color: #8b949e; font-size: 0.9rem; margin: 12px 0; }
+.msg { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 0.9rem; color: #8b949e; }
