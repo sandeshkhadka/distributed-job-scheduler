@@ -4,14 +4,21 @@
 #include "job_selector_registry.hpp"
 #include "scheduler.grpc.pb.h"
 #include "scheduler.pb.h"
-#include "scheduler_db.h"
 #include <grpcpp/support/status.h>
 #include <memory>
 #include <string>
 
+#if defined(USE_PG) && USE_PG
+#include "pg_scheduler_db.hpp"
+using SchedulerDb = PgSchedulerDatabase;
+#else
+#include "scheduler_db.h"
+using SchedulerDb = SchedulerDatabase;
+#endif
+
 class SchedulerServiceImpl final : public djs::SchedulerService::Service {
   private:
-    SchedulerDatabase db;
+    SchedulerDb db;
 
   public:
     std::unique_ptr<JobSelector> job_selector_;
@@ -47,4 +54,12 @@ class SchedulerServiceImpl final : public djs::SchedulerService::Service {
     grpc::Status ReportWorkerMetrics(grpc::ServerContext* context,
                                      const djs::WorkerMetrics* request,
                                      djs::ReportWorkerMetricsResponse* reply) override;
+
+    grpc::Status ReportJobEbpfMetrics(grpc::ServerContext* context,
+                                      const djs::ReportJobEbpfMetricsRequest* request,
+                                      djs::ReportJobEbpfMetricsResponse* reply) override;
+
+    grpc::Status GetJobTimeseries(grpc::ServerContext* context,
+                                  const djs::GetJobTimeseriesRequest* request,
+                                  djs::GetJobTimeseriesResponse* reply) override;
 };

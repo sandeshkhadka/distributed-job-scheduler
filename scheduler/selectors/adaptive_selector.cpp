@@ -20,7 +20,7 @@ std::string AdaptiveSelector::name() const { return "adaptive"; }
 
 Job AdaptiveSelector::select_job(const Worker& worker,
                                  const std::vector<Job>& jobs,
-                                 SchedulerDatabase& db) {
+                                 ISchedulerDatabase& db) {
     auto metrics = db.get_worker_latest_metrics(worker.id);
     if (!metrics.has_value())
         return Job{};

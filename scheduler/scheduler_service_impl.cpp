@@ -1,6 +1,5 @@
 #include "scheduler_service_impl.h"
 #include "logger.h"
-#include "scheduler_db.h"
 #include <grpcpp/support/status.h>
 #include <iostream>
 #include <optional>
@@ -40,7 +39,7 @@ void deserialize_params(const std::string& encoded,
 } // anonymous namespace
 
 static grpc::Status
-check_auth(grpc::ServerContext* context, SchedulerDatabase& db, const std::string& allowed_type) {
+check_auth(grpc::ServerContext* context, ISchedulerDatabase& db, const std::string& allowed_type) {
     auto md = context->client_metadata().find("authorization");
     if (md == context->client_metadata().end()) {
         return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "missing authorization");
@@ -292,5 +291,62 @@ grpc::Status SchedulerServiceImpl::ReportWorkerMetrics(grpc::ServerContext* cont
                  "% mem=" + std::to_string(mem) + "%");
 
     reply->set_accepted(true);
+    return grpc::Status::OK;
+}
+
+grpc::Status
+SchedulerServiceImpl::ReportJobEbpfMetrics(grpc::ServerContext* context,
+                                           const djs::ReportJobEbpfMetricsRequest* request,
+                                           djs::ReportJobEbpfMetricsResponse* reply) {
+    auto auth = check_auth(context, db, "worker");
+    if (!auth.ok())
+        return auth;
+
+    int64_t worker_id = request->worker_id();
+    for (const auto& m : request->metrics()) {
+        db.save_job_ebpf_metrics(m.job_id(),
+                                 worker_id,
+                                 m.timestamp(),
+                                 m.syscall_read_count(),
+                                 m.syscall_write_count(),
+                                 m.syscall_openat_count(),
+                                 m.io_read_bytes(),
+                                 m.io_write_bytes(),
+                                 m.net_tx_bytes(),
+                                 m.net_rx_bytes(),
+                                 m.cpu_usage_us(),
+                                 m.mem_current_bytes());
+    }
+
+    reply->set_accepted(true);
+    return grpc::Status::OK;
+}
+
+grpc::Status SchedulerServiceImpl::GetJobTimeseries(grpc::ServerContext* context,
+                                                    const djs::GetJobTimeseriesRequest* request,
+                                                    djs::GetJobTimeseriesResponse* reply) {
+    auto auth = check_auth(context, db, "client");
+    if (!auth.ok())
+        return auth;
+
+    int job_id = request->job_id();
+    int limit = request->limit() > 0 ? request->limit() : 100;
+
+    auto points = db.get_job_timeseries(job_id, limit);
+    for (const auto& p : points) {
+        auto* m = reply->add_points();
+        m->set_job_id(job_id);
+        m->set_timestamp(p.timestamp);
+        m->set_syscall_read_count(p.syscall_read_count);
+        m->set_syscall_write_count(p.syscall_write_count);
+        m->set_syscall_openat_count(p.syscall_openat_count);
+        m->set_io_read_bytes(p.io_read_bytes);
+        m->set_io_write_bytes(p.io_write_bytes);
+        m->set_net_tx_bytes(p.net_tx_bytes);
+        m->set_net_rx_bytes(p.net_rx_bytes);
+        m->set_cpu_usage_us(p.cpu_usage_us);
+        m->set_mem_current_bytes(p.mem_current_bytes);
+    }
+
     return grpc::Status::OK;
 }

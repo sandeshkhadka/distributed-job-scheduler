@@ -1,4 +1,5 @@
 #include "argparse.hpp"
+#include "ebpf_metric_store.hpp"
 #include "job_orchestrator.hpp"
 #include "metrics_collector.hpp"
 #include "worker_client.hpp"
@@ -12,7 +13,7 @@ using Logger = DJS::Logger;
 
 namespace {
 
-#define POLL_INTERVAL_SECS 60
+#define POLL_INTERVAL_SECS 2
 
 std::string serialize_params(const std::map<std::string, std::string>& params) {
     std::string result;
@@ -96,9 +97,16 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    EbpfMetricStore metric_store;
     JobOrchestrator orchestrator;
     orchestrator.executor_path = executor_path;
+    orchestrator.metric_store = &metric_store;
     orchestrator.on_completed = [&](int job_id, const JobResult& result) {
+        // Drain any remaining eBPF metrics
+        auto remaining = metric_store.drain(job_id);
+        if (!remaining.empty()) {
+            client.report_ebpf_metrics(job_id, remaining);
+        }
         client.store_job_result(job_id, result);
         client.db.update_received_job_status(job_id, result.success ? "completed" : "failed");
         Logger::Info("Orchestrator completed job " + std::to_string(job_id) + ": " +
@@ -113,6 +121,14 @@ int main(int argc, char* argv[]) {
 
         auto metrics = metrics_collector.collect();
         client.report_worker_metrics(metrics);
+
+        // Report accumulated eBPF metrics for active jobs
+        for (int jid : metric_store.active_job_ids()) {
+            auto snapshots = metric_store.drain(jid);
+            if (!snapshots.empty()) {
+                client.report_ebpf_metrics(jid, snapshots);
+            }
+        }
 
         auto job = client.GetJob();
         if (!job) {

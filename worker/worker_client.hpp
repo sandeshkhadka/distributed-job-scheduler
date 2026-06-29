@@ -39,4 +39,5 @@ class WorkerClient {
     void store_job_result(int job_id, const JobResult& result);
     void report_pending_results();
     void report_worker_metrics(const WorkerMetricsData& metrics);
+    void report_ebpf_metrics(int job_id, const std::vector<djs::JobEbpfMetrics>& metrics);
 };

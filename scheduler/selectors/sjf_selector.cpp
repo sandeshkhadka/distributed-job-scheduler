@@ -7,7 +7,7 @@ std::string SJFSelector::name() const { return "sjf"; }
 
 Job SJFSelector::select_job(const Worker& worker,
                             const std::vector<Job>& jobs,
-                            SchedulerDatabase& db) {
+                            ISchedulerDatabase& db) {
     auto avg_durations = db.get_avg_durations();
 
     const Job* best = nullptr;
