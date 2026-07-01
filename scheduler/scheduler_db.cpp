@@ -13,6 +13,7 @@ int avg_duration_cb(void* data, int argc, char** argv, char** col_name);
 int avg_spikes_cb(void* data, int argc, char** argv, char** col_name);
 
 SchedulerDatabase::SchedulerDatabase() : Database("scheduler.db") {
+    Logger::Info("SchedulerDatabase initialized (SQLite backend)");
     // create client table
     std::string create_client_table = "CREATE TABLE IF NOT EXISTS clients ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -235,6 +236,41 @@ void SchedulerDatabase::update_job_status(int job_id, const std::string& status)
     SqliteDatabase::instance().execute(query);
 }
 
+std::vector<Job> SchedulerDatabase::get_jobs_by_client_id(int client_id) {
+    std::string query = "SELECT * FROM jobs WHERE client_id = " + std::to_string(client_id) +
+                        " ORDER BY created_at DESC;";
+    std::vector<Job> jobs;
+    SqliteDatabase::instance().execute(query, get_job_cb, &jobs);
+    return jobs;
+}
+
+SchedulerDatabase::JobResultInfo SchedulerDatabase::get_job_result(int job_id) {
+    std::string query =
+        "SELECT j.id, j.status, r.success, r.message, r.artifact_url, r.completed_at "
+        "FROM jobs j LEFT JOIN job_results r ON j.id = r.job_id "
+        "WHERE j.id = " +
+        std::to_string(job_id) + ";";
+    JobResultInfo info{};
+    auto cb = [](void* data, int argc, char** argv, char**) -> int {
+        auto* r = static_cast<SchedulerDatabase::JobResultInfo*>(data);
+        if (argc >= 1 && argv[0])
+            r->job_id = std::stoi(argv[0]);
+        if (argc >= 2 && argv[1])
+            r->status = argv[1];
+        if (argc >= 3 && argv[2])
+            r->success = std::stoi(argv[2]) != 0;
+        if (argc >= 4 && argv[3])
+            r->message = argv[3];
+        if (argc >= 5 && argv[4])
+            r->artifact_url = argv[4];
+        if (argc >= 6 && argv[5])
+            r->completed_at = argv[5];
+        return 0;
+    };
+    SqliteDatabase::instance().execute(query, cb, &info);
+    return info;
+}
+
 void SchedulerDatabase::save_job_result(int job_id,
                                         bool success,
                                         const std::string& message,
@@ -372,6 +408,26 @@ std::map<std::string, JobTypeSpikes> SchedulerDatabase::get_avg_spikes() {
     std::map<std::string, JobTypeSpikes> result;
     SqliteDatabase::instance().execute(query, avg_spikes_cb, &result);
     return result;
+}
+
+void SchedulerDatabase::save_job_ebpf_metrics(int64_t job_id,
+                                              int64_t worker_id,
+                                              double timestamp,
+                                              int64_t syscall_read_count,
+                                              int64_t syscall_write_count,
+                                              int64_t syscall_openat_count,
+                                              int64_t io_read_bytes,
+                                              int64_t io_write_bytes,
+                                              int64_t net_tx_bytes,
+                                              int64_t net_rx_bytes,
+                                              int64_t cpu_usage_us,
+                                              int64_t mem_current_bytes) {
+    // SQLite backend does not support eBPF metrics
+}
+
+std::vector<SchedulerDatabase::EbpfTimeseriesPoint>
+SchedulerDatabase::get_job_timeseries(int job_id, int limit) {
+    return {};
 }
 
 std::optional<WorkerMetricsBrief> SchedulerDatabase::get_worker_latest_metrics(int worker_id) {

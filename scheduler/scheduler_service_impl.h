@@ -35,6 +35,10 @@ class SchedulerServiceImpl final : public djs::SchedulerService::Service {
                         const djs::GetJobRequest* request,
                         djs::GetJobResponse* reply) override;
 
+    grpc::Status GetJobStatus(grpc::ServerContext* context,
+                              const djs::GetJobStatusRequest* request,
+                              djs::GetJobStatusReply* reply) override;
+
     grpc::Status RegisterClient(grpc::ServerContext* context,
                                 const djs::RegisterClientRequest* request,
                                 djs::RegisterClientResponse* response) override;
@@ -62,4 +66,7 @@ class SchedulerServiceImpl final : public djs::SchedulerService::Service {
     grpc::Status GetJobTimeseries(grpc::ServerContext* context,
                                   const djs::GetJobTimeseriesRequest* request,
                                   djs::GetJobTimeseriesResponse* reply) override;
+    grpc::Status GetClientJobs(grpc::ServerContext* context,
+                               const djs::GetClientJobsRequest* request,
+                               djs::GetClientJobsResponse* reply) override;
 };
