@@ -86,6 +86,7 @@ int token_id_cb(void* data, int argc, char** argv, char**) {
 } // anonymous namespace
 
 PgSchedulerDatabase::PgSchedulerDatabase() {
+    Logger::Info("PgSchedulerDatabase initialized (PostgreSQL backend)");
     PgDatabase::init();
     PgDatabase::instance().apply_migrations("migrations/001_init.sql");
 }
@@ -140,6 +141,40 @@ void PgSchedulerDatabase::update_job_status(int job_id, const std::string& statu
     std::string q = "UPDATE jobs SET status = '" + status +
                     "', updated_at = CURRENT_TIMESTAMP WHERE id = " + std::to_string(job_id);
     PgDatabase::instance().execute(q);
+}
+
+std::vector<Job> PgSchedulerDatabase::get_jobs_by_client_id(int client_id) {
+    std::string q = "SELECT * FROM jobs WHERE client_id = " + std::to_string(client_id) +
+                    " ORDER BY created_at DESC";
+    std::vector<Job> jobs;
+    PgDatabase::instance().execute(q, get_job_cb, &jobs);
+    return jobs;
+}
+
+PgSchedulerDatabase::JobResultInfo PgSchedulerDatabase::get_job_result(int job_id) {
+    std::string q = "SELECT j.id, j.status, r.success, r.message, r.artifact_url, r.completed_at "
+                    "FROM jobs j LEFT JOIN job_results r ON j.id = r.job_id "
+                    "WHERE j.id = " +
+                    std::to_string(job_id);
+    JobResultInfo info{};
+    auto cb = [](void* data, int argc, char** argv, char**) -> int {
+        auto* r = static_cast<JobResultInfo*>(data);
+        if (argc >= 1 && argv[0])
+            r->job_id = std::stoi(argv[0]);
+        if (argc >= 2 && argv[1])
+            r->status = argv[1];
+        if (argc >= 3 && argv[2])
+            r->success = std::stoi(argv[2]) != 0;
+        if (argc >= 4 && argv[3])
+            r->message = argv[3];
+        if (argc >= 5 && argv[4])
+            r->artifact_url = argv[4];
+        if (argc >= 6 && argv[5])
+            r->completed_at = argv[5];
+        return 0;
+    };
+    PgDatabase::instance().execute(q, cb, &info);
+    return info;
 }
 
 void PgSchedulerDatabase::save_job_result(int job_id,

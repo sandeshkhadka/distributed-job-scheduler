@@ -34,11 +34,22 @@ CliParser::CliParser(int argc, char* argv[]) : _dist_cli("dist_cli") {
     this->_actions.push_back("list");
     _list_cmd.add_description("List the jobs");
 
+    this->_actions.push_back("jobs");
+    _jobs_cmd.add_description("List your submitted jobs");
+    _jobs_cmd.add_argument("--refresh").flag().help("Force refresh from scheduler");
+
+    this->_actions.push_back("result");
+    _result_cmd.add_description("Get the result of a job by job ID");
+    _result_cmd.add_argument("--id").required().help("Job ID to query");
+    _result_cmd.add_argument("--refresh").flag().help("Force refresh from scheduler");
+
     this->_dist_cli.add_subparser(_submit_cmd);
     this->_dist_cli.add_subparser(_register_cmd);
     this->_dist_cli.add_subparser(_query_cmd);
     this->_dist_cli.add_subparser(_cancel_cmd);
     this->_dist_cli.add_subparser(_list_cmd);
+    this->_dist_cli.add_subparser(_jobs_cmd);
+    this->_dist_cli.add_subparser(_result_cmd);
 
     try {
         this->_dist_cli.parse_args(argc, argv);
@@ -71,6 +82,9 @@ std::string CliParser::get_value(const std::string& flag) {
         if (_dist_cli.is_subcommand_used(_register_cmd)) {
             return _register_cmd.get(flag);
         }
+        if (_dist_cli.is_subcommand_used(_result_cmd)) {
+            return _result_cmd.get(flag);
+        }
     } catch (std::exception& e) {
         _logger.Error("Invalid value for flag: " + flag + "Error: " + e.what());
         value = "";
@@ -87,6 +101,20 @@ std::vector<std::string> CliParser::get_list(const std::string& flag) {
         }
     }
     return {};
+}
+
+bool CliParser::has_flag(const std::string& flag) {
+    try {
+        if (_dist_cli.is_subcommand_used(_jobs_cmd)) {
+            return _jobs_cmd.get<bool>(flag);
+        }
+        if (_dist_cli.is_subcommand_used(_result_cmd)) {
+            return _result_cmd.get<bool>(flag);
+        }
+    } catch (...) {
+        return false;
+    }
+    return false;
 }
 
 void CliParser::print_help() { std::cout << _dist_cli; }
