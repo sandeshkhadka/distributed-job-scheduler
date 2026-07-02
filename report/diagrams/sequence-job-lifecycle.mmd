@@ -1,0 +1,66 @@
+---
+title: Job Lifecycle Sequence
+---
+sequenceDiagram
+    actor Client
+    participant CLI as CLI Client
+    participant Scheduler
+    participant DB as SchedulerDB
+    participant Selector as JobSelector
+    participant Worker
+    participant Orch as JobOrchestrator
+    participant Exec as djs-executor
+
+    Client->>CLI: submit stress_cpu cores=2 duration=5000
+    CLI->>Scheduler: SubmitJob(client_id, job_type, params)
+    activate Scheduler
+    Scheduler->>DB: insert_job() → status="not started"
+    DB-->>Scheduler: job_id
+    Scheduler-->>CLI: job_id, accepted=true
+    deactivate Scheduler
+    CLI-->>Client: Job submitted (ID: 42)
+
+    loop Every 2s
+        Worker->>Scheduler: GetJob(worker_id)
+        activate Scheduler
+        Scheduler->>DB: get_jobs_by_status("not started")
+        DB-->>Scheduler: candidate jobs
+        Scheduler->>Selector: select_job(worker, jobs, db)
+        activate Selector
+        Selector-->>Scheduler: selected job
+        deactivate Selector
+        Scheduler->>DB: insert_worker_job() → status="ongoing"
+        DB-->>Scheduler: ok
+        Scheduler-->>Worker: job_id, job_type, params
+        deactivate Scheduler
+    end
+
+    Worker->>Scheduler: ConfirmJobReceived(job_id)
+    activate Scheduler
+    Scheduler->>DB: update status → "scheduled"
+    Scheduler-->>Worker: accepted
+    deactivate Scheduler
+
+    Worker->>Scheduler: ReportJobStarted(job_id)
+    activate Scheduler
+    Scheduler->>DB: update status → "started", save snapshot
+    Scheduler-->>Worker: accepted
+    deactivate Scheduler
+
+    Worker->>Orch: execute(job_id, type, params)
+    activate Orch
+    Orch->>Orch: make_cgroup(job_id)
+    Orch->>Exec: fork + execvp djs-executor
+    activate Exec
+    Exec->>Exec: run stress test
+    Exec-->>Orch: JSON result via pipe
+    deactivate Exec
+    Orch->>Orch: teardown_job() → remove cgroup
+    Orch-->>Worker: on_completed callback
+    deactivate Orch
+
+    Worker->>Scheduler: ReportJobResult(job_id, success, message)
+    activate Scheduler
+    Scheduler->>DB: save result, compute analytics
+    Scheduler-->>Worker: ok
+    deactivate Scheduler

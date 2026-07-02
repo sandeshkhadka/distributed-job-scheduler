@@ -1,0 +1,32 @@
+---
+title: Scheduling and Execution Workflow
+---
+flowchart TB
+    Start([Start]) --> Submit[Client submits job via CLI]
+    Submit --> Queue[Job enters scheduler queue]
+    Queue --> Poll{Worker polls for job?}
+
+    Poll -->|Yes| Select[Scheduler selects job using algorithm]
+    Poll -->|No| Poll
+
+    Select --> Assign[Scheduler assigns job to worker]
+    Assign --> Confirm[Worker confirms receipt]
+    Confirm --> Setup[Worker creates cgroup]
+
+    Setup --> Fork[Worker forks djs-executor]
+    Fork --> Attach[Attach eBPF monitor to cgroup]
+    Attach --> Monitor[Monitor execution + collect metrics]
+
+    Monitor --> Complete{Job completes?}
+
+    Complete -->|Success| Collect[Parse result JSON]
+    Complete -->|Error| Fail[Report failure]
+
+    Collect --> Cleanup[Tear down cgroup]
+    Fail --> Cleanup
+
+    Cleanup --> Report[Worker reports result to scheduler]
+    Report --> Analytics[Scheduler computes runtime analytics]
+    Analytics --> DB[Store analytics for future scheduling]
+
+    DB --> EndJob([End])

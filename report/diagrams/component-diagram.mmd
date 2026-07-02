@@ -1,0 +1,75 @@
+---
+title: Component Diagram
+---
+flowchart TB
+    subgraph Shared[Shared Library]
+        DBBase[Database base class]
+        Logger[Logger]
+        Argparse[argparse.hpp]
+    end
+
+    subgraph Scheduler_Comp[Scheduler]
+        direction TB
+        SC[SchedulerServiceImpl<br/>gRPC service]
+        SDB[SchedulerDatabase<br/>SQLite / PostgreSQL]
+        JSR[JobSelectorRegistry]
+        JS[JobSelector<br/>FCFS / SJF / Adaptive]
+    end
+
+    subgraph Worker_Comp[Worker]
+        direction TB
+        WC[WorkerClient<br/>gRPC stub wrapper]
+        WD[WorkerDatabase]
+        JO[JobOrchestrator]
+        MC[MetricsCollector]
+        EMS[EbpfMetricStore]
+    end
+
+    subgraph Executors[Executor Library]
+        SE[StressCpuExecutor]
+        SME[StressMemExecutor]
+        SIE[StressIOExecutor]
+        MLE[MixedLoadExecutor]
+    end
+
+    subgraph CLI[CLI Client]
+        SC2[SchedulerClient<br/>gRPC stub]
+        CDB[CliDatabase]
+        CP[CliParser]
+    end
+
+    subgraph Admin[Admin Tool]
+        ADB[AdminDatabase]
+        TG[Token Generator]
+    end
+
+    subgraph Ebpf[ eBPF Monitor]
+        EBM[EbpfMonitor<br/>libbpf wrapper]
+        BPF[BPF Program<br/>job_monitor.bpf.o]
+    end
+
+    subgraph Exec[ djs-executor]
+        EM[Executor Main]
+    end
+
+    subgraph Proto[Proto Library]
+        GRPC[Generated gRPC<br/>+ Protobuf code]
+    end
+
+    CLI <-->|gRPC| Scheduler_Comp
+    Worker_Comp <-->|gRPC| Scheduler_Comp
+    Admin -->|SQL| Scheduler_Comp
+    Worker_Comp -->|fork + exec| Exec
+    Worker_Comp -->|fork + exec| Ebpf
+    Exec -->|links| Executors
+    Worker_Comp -->|links| Executors
+    Worker_Comp -->|reads| MC
+    Ebpf -->|JSON pipe| Worker_Comp
+    Worker_Comp -->|stores| EMS
+    Scheduler_Comp -->|links| Shared
+    Worker_Comp -->|links| Shared
+    CLI -->|links| Shared
+    Admin -->|links| Shared
+    Scheduler_Comp -->|links| Proto
+    Worker_Comp -->|links| Proto
+    CLI -->|links| Proto

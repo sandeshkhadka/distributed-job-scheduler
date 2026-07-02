@@ -8,7 +8,12 @@ This chapter presents the detailed design of the Distributed Job Scheduler syste
 
 The refined class diagrams provide detailed attributes, method signatures, and relationships for the core classes identified during analysis.
 
-\placeholderfig{refined_class_diagram}{Refined class diagram showing detailed class structures and relationships}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/class-design.png}
+    \caption{Refined class diagram showing detailed class structures and relationships}
+    \label{fig:class-design}
+\end{figure}
 
 \subsubsection{Scheduler-Side Classes}
 
@@ -55,9 +60,14 @@ The refined class diagrams provide detailed attributes, method signatures, and r
 
 \subsection{Component Diagrams}
 
-The component diagram (Figure~\ref{fig:component_diagram}) illustrates the high-level software components and their dependencies.
+The component diagram (Figure~\ref{fig:component-diagram}) illustrates the high-level software components and their dependencies.
 
-\placeholderfig{component_diagram}{Component diagram showing system modules and their inter-dependencies}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/component-diagram.png}
+    \caption{Component diagram showing system modules and their inter-dependencies}
+    \label{fig:component-diagram}
+\end{figure}
 
 The system is organized into the following components:
 
@@ -83,9 +93,14 @@ The system is organized into the following components:
 
 \subsection{Deployment Diagrams}
 
-The deployment diagram (Figure~\ref{fig:deployment_diagram}) shows the physical deployment of components across nodes.
+The deployment diagram (Figure~\ref{fig:deployment-diagram}) shows the physical deployment of components across nodes.
 
-\placeholderfig{deployment_diagram}{Deployment diagram showing the distributed deployment architecture}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/deployment-diagram.png}
+    \caption{Deployment diagram showing the distributed deployment architecture}
+    \label{fig:deployment-diagram}
+\end{figure}
 
 The system is deployed as follows:
 
@@ -210,7 +225,12 @@ Jobs with historical spike data that are predicted to fit within the worker's ca
 
 This section presents the database design for the scheduler backend. The database serves as the persistent store for all system data including job definitions, worker registrations, metrics, and analytics.
 
-\placeholderfig{er_diagram}{Entity-Relationship diagram showing the database schema}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/er-diagram.png}
+    \caption{Entity-Relationship diagram showing the database schema}
+    \label{fig:er-diagram}
+\end{figure}
 
 \subsection{Relational Schema}
 

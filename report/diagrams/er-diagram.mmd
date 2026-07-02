@@ -1,0 +1,120 @@
+---
+title: Entity-Relationship Diagram
+---
+erDiagram
+    clients ||--o{ jobs : submits
+    clients ||--o{ client_token_usage : uses
+    auth_tokens ||--o{ client_token_usage : "used by"
+
+    jobs ||--|| job_results : has
+    jobs ||--|| job_runtime_snapshots : has
+    jobs ||--o{ job_runtime_analytics : generates
+    jobs ||--o{ job_ebpf_metrics : generates
+    jobs }o--|| job_worker : assigned
+
+    workers ||--|| worker_metrics : reports
+    workers ||--o{ job_ebpf_metrics : monitors
+    workers }o--|| job_worker : runs
+
+    clients {
+        int id PK
+        string name
+        string status
+    }
+
+    auth_tokens {
+        int id PK
+        string token UK
+        string description
+        string token_type "client | worker"
+        bool active
+        datetime created_at
+    }
+
+    client_token_usage {
+        int id PK
+        int client_id FK
+        int token_id FK
+        datetime last_used_at
+    }
+
+    jobs {
+        int id PK
+        string job_type
+        string params
+        string status "not started | ongoing | scheduled | started | completed | failed"
+        int client_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    workers {
+        int id PK
+        int cpu_cores
+        float mem_size
+        float disk_size
+        float cpu_freq
+        string os
+        string name
+        string status
+    }
+
+    job_worker {
+        int job_id PK,FK
+        int worker_id PK,FK
+    }
+
+    job_results {
+        int job_id PK,FK
+        bool success
+        string message
+        string artifact_url
+        datetime completed_at
+    }
+
+    job_runtime_snapshots {
+        int job_id PK,FK
+        datetime started_at
+        float start_cpu_percent
+        float start_memory_percent
+        float peak_cpu_percent
+        float peak_memory_percent
+    }
+
+    job_runtime_analytics {
+        int id PK
+        int job_id FK
+        string job_type
+        int duration_ms
+        float cpu_spike_percent
+        float memory_spike_percent
+        datetime recorded_at
+    }
+
+    worker_metrics {
+        int worker_id PK,FK
+        float cpu_percent
+        float memory_percent
+        float memory_used_mb
+        float memory_total_mb
+        float disk_percent
+        float load_avg_1m
+        int active_jobs
+        datetime reported_at
+    }
+
+    job_ebpf_metrics {
+        int id PK
+        int job_id FK
+        int worker_id FK
+        float recorded_at
+        bigint syscall_read_count
+        bigint syscall_write_count
+        bigint syscall_openat_count
+        bigint io_read_bytes
+        bigint io_write_bytes
+        bigint net_tx_bytes
+        bigint net_rx_bytes
+        bigint cpu_usage_us
+        bigint mem_current_bytes
+    }

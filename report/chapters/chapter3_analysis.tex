@@ -10,7 +10,12 @@ This chapter presents a comprehensive analysis of the Distributed Job Scheduler 
 
 The functional requirements describe the specific behaviors and capabilities that the system must provide. They are illustrated using a use case diagram and detailed use case descriptions.
 
-\placeholderfig{Use Case Diagram}{Use case diagram showing actors and use cases for the Distributed Job Scheduler}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/use-case.png}
+    \caption{Use case diagram showing actors and use cases for the Distributed Job Scheduler}
+    \label{fig:use-case}
+\end{figure}
 
 \begin{description}
     \item[Actor 1: Client (User)] A user who submits stress-test jobs to the system.
@@ -106,9 +111,14 @@ This section presents the object-oriented analysis of the system using UML diagr
 
 \subsubsection{Class Diagram}
 
-The class diagram (Figure~\ref{fig:class_diagram_analysis}) shows the main classes and their relationships in the Distributed Job Scheduler system.
+The class diagram (Figure~\ref{fig:class-analysis}) shows the main classes and their relationships in the Distributed Job Scheduler system.
 
-\placeholderfig{class_diagram_analysis}{Analysis-level class diagram showing key classes and relationships}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/class-analysis.png}
+    \caption{Analysis-level class diagram showing key classes and relationships}
+    \label{fig:class-analysis}
+\end{figure}
 
 The principal classes identified during analysis are:
 
@@ -140,9 +150,14 @@ The principal classes identified during analysis are:
 
 The sequence diagrams capture the dynamic interactions between objects during key system operations.
 
-\placeholderfig{sequence_job_lifecycle}{Sequence diagram showing the complete job lifecycle from submission to completion}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/sequence-job-lifecycle.png}
+    \caption{Sequence diagram showing the complete job lifecycle from submission to completion}
+    \label{fig:sequence-job-lifecycle}
+\end{figure}
 
-\textbf{Job Lifecycle (Figure~\ref{fig:sequence_job_lifecycle}):}
+\textbf{Job Lifecycle (Figure~\ref{fig:sequence-job-lifecycle}):}
 \begin{enumerate}
     \item The Client submits a job via the CLI, which sends a \texttt{SubmitJob} gRPC request to the Scheduler. The Scheduler inserts a job record with status \texttt{"not started"}.
     \item The Worker periodically sends \texttt{GetJob} requests. The Scheduler's \texttt{JobSelector} selects the most appropriate job and assigns it, updating the status to \texttt{"ongoing"}.
@@ -155,22 +170,37 @@ The sequence diagrams capture the dynamic interactions between objects during ke
     \item The Scheduler saves the result and computes runtime analytics.
 \end{enumerate}
 
-\placeholderfig{sequence_worker_registration}{Sequence diagram showing the worker registration process}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/sequence-worker-registration.png}
+    \caption{Sequence diagram showing the worker registration process}
+    \label{fig:sequence-worker-registration}
+\end{figure}
 
-\textbf{Worker Registration (Figure~\ref{fig:sequence_worker_registration}):}
+\textbf{Worker Registration (Figure~\ref{fig:sequence-worker-registration}):}
 \begin{enumerate}
     \item The Worker sends \texttt{RegisterWorker} with its hardware specs and authentication token.
     \item The Scheduler validates the token, creates a worker record, and returns a worker ID.
     \item The Worker caches the worker ID and token locally for crash recovery.
 \end{enumerate}
 
-\placeholderfig{sequence_metrics_reporting}{Sequence diagram showing the periodic metrics reporting flow}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/sequence-metrics-reporting.png}
+    \caption{Sequence diagram showing the periodic metrics reporting flow}
+    \label{fig:sequence-metrics-reporting}
+\end{figure}
 
 \subsubsection{State Diagram}
 
-The state diagram (Figure~\ref{fig:state_diagram}) captures the states and transitions of a job throughout its lifecycle.
+The state diagram (Figure~\ref{fig:state-job-states}) captures the states and transitions of a job throughout its lifecycle.
 
-\placeholderfig{state_diagram}{State diagram showing job states and transitions}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/state-job-states.png}
+    \caption{State diagram showing job states and transitions}
+    \label{fig:state-job-states}
+\end{figure}
 
 A job passes through the following states:
 \begin{description}
@@ -184,9 +214,14 @@ A job passes through the following states:
 
 \subsubsection{Activity Diagram}
 
-The activity diagram (Figure~\ref{fig:activity_diagram}) models the workflow of the job scheduling and execution process.
+The activity diagram (Figure~\ref{fig:activity-workflow}) models the workflow of the job scheduling and execution process.
 
-\placeholderfig{activity_diagram}{Activity diagram showing the scheduling and execution workflow}
+\begin{figure}[htbp]
+    \centering
+    \figimg{figures/activity-workflow.png}
+    \caption{Activity diagram showing the scheduling and execution workflow}
+    \label{fig:activity-workflow}
+\end{figure}
 
 The workflow proceeds as follows:
 \begin{enumerate}

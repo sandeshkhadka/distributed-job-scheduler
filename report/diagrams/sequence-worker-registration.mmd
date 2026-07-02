@@ -1,0 +1,24 @@
+---
+title: Worker Registration Sequence
+---
+sequenceDiagram
+    participant Worker
+    participant Scheduler
+    participant DB as SchedulerDB
+    participant WorkerDB as WorkerDatabase
+
+    Worker->>WorkerDB: get_token()
+    WorkerDB-->>Worker: worker token
+
+    Worker->>Scheduler: RegisterWorker(token, cpu_cores, mem_size, disk_size, cpu_freq, os, name)
+    activate Scheduler
+    Scheduler->>DB: is_token_valid(token, "worker")
+    DB-->>Scheduler: valid
+    Scheduler->>DB: insert_worker(specs)
+    DB-->>Scheduler: worker_id
+    Scheduler-->>Worker: ok, worker_id
+    deactivate Scheduler
+
+    Worker->>WorkerDB: insert_worker(worker_id, name)
+    Worker->>WorkerDB: save_token(token)
+    WorkerDB-->>Worker: cached

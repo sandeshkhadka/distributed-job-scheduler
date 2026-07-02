@@ -1,0 +1,173 @@
+---
+title: Refined Design-Level Class Diagram
+---
+classDiagram
+    class SchedulerServiceImpl {
+        -SchedulerDb db_
+        +unique_ptr~JobSelector~ job_selector_
+        +SubmitJob(SubmitJobRequest, SubmitJobReply)
+        +GetJob(GetJobRequest, GetJobResponse)
+        +RegisterWorker(RegisterWorkerRequest, RegisterWorkerReply)
+        +RegisterClient(RegisterClientRequest, RegisterClientResponse)
+        +ReportJobResult(ReportJobResultRequest, ReportJobResultReply)
+        +ReportWorkerMetrics(WorkerMetrics, ReportWorkerMetricsResponse)
+        +ReportJobEbpfMetrics(ReportJobEbpfMetricsRequest, ReportJobEbpfMetricsResponse)
+        +ConfirmJobReceived(ConfirmJobReceivedRequest, ConfirmJobReceivedResponse)
+        +ReportJobStarted(ReportJobStartedRequest, ReportJobStartedResponse)
+        +GetJobTimeseries(GetJobTimeseriesRequest, GetJobTimeseriesResponse)
+        +GetJobStatus(GetJobStatusRequest, GetJobStatusReply)
+    }
+
+    class JobSelector {
+        <<abstract>>
+        +string name()$
+        +Job select_job(const Worker&, const vector~Job~&, ISchedulerDatabase&)$
+    }
+
+    class FCFSSelector {
+        +Job select_job() override
+    }
+
+    class SJFSelector {
+        +Job select_job() override
+    }
+
+    class AdaptiveSelector {
+        +Job select_job() override
+    }
+
+    class ISchedulerDatabase {
+        <<interface>>
+        +bool is_token_valid(token, token_type)$
+        +optional~WorkerMetricsBrief~ get_worker_latest_metrics(worker_id)$
+        +map~string,double~ get_avg_durations()$
+        +map~string,JobTypeSpikes~ get_avg_spikes()$
+    }
+
+    class SchedulerDatabase {
+        -SQLiteDB db_
+        +SchedulerDatabase()
+        +int insert_job(job_type, params, client_id)
+        +int register_worker(cpu_cores, mem_size, ...)
+        +void insert_worker_job(worker_id, job_id)
+        +void save_worker_metrics(worker_id, metrics)
+        +void save_job_result(job_id, result)
+        +void save_job_analytics(job_id, type, duration, spikes)
+        +void save_ebpf_metrics(job_id, worker_id, metrics)
+        +bool is_token_valid(token, token_type) override
+        +optional~WorkerMetricsBrief~ get_worker_latest_metrics(worker_id) override
+        +map~string,double~ get_avg_durations() override
+        +map~string,JobTypeSpikes~ get_avg_spikes() override
+    }
+
+    class Database {
+        +Database(db_name)
+        +int insert_job(job_type, params, client_id)
+        +Job get_job_by_id(job_id)
+        +vector~Job~ get_jobs_by_status(status)
+    }
+
+    class WorkerClient {
+        -unique_ptr~Stub~ stub_
+        -int worker_id_
+        -string token_
+        +WorkerClient(channel)
+        +int Register()
+        +optional~ReceivedJob~ GetJob()
+        +bool confirm_job_received(job_id)
+        +bool report_job_started(job_id)
+        +void store_job_result(job_id, result)
+        +void report_pending_results()
+        +void report_worker_metrics(metrics)
+        +void report_ebpf_metrics(job_id, snapshots)
+    }
+
+    class JobOrchestrator {
+        -map~int,JobHandle~ active_jobs_
+        -thread monitor_
+        -mutex mutex_
+        +function~void(int,JobResult)~ on_completed
+        +JobHandle execute(job_id, job_type, params)
+        -void monitor_loop()
+        -void teardown_job(job_id, result)
+        -void ebpf_reader_thread(job_id, fd)
+        -string make_cgroup(job_id)
+        -void remove_cgroup(path)
+        -JobResult parse_result(json)
+    }
+
+    class JobHandle {
+        +int job_id
+        +int pid
+        +string cgroup_path
+        +int result_fd
+        +thread ebpf_reader
+    }
+
+    class JobExecutor {
+        <<abstract>>
+        +string type()$
+        +JobResult execute(map~string,string~ params)$
+    }
+
+    class StressCpuExecutor {
+        +JobResult execute() override
+    }
+
+    class StressMemExecutor {
+        +JobResult execute() override
+    }
+
+    class StressIOExecutor {
+        +JobResult execute() override
+    }
+
+    class MixedLoadExecutor {
+        +JobResult execute() override
+    }
+
+    class MetricsCollector {
+        -CpuTimes prev_cpu_
+        -NetBytes prev_net_
+        -bool first_
+        +WorkerMetricsData collect()
+    }
+
+    class EbpfMonitor {
+        -bpf_object* obj_
+        -bpf_program* prog_
+        -bpf_link* link_
+        -int fd_syscall_count_, fd_io_bytes_, fd_net_bytes_
+        -int job_id_, target_pid_
+        +bool load_and_attach(bpf_path, job_id, cgroup_path, pid)
+        +EbpfSnapshot poll()
+        +void detach()
+    }
+
+    class EbpfMetricStore {
+        -mutex mutex_
+        -unordered_map~int,vector~JobEbpfMetrics~~ metrics_
+        +void add_snapshot(job_id, metrics)
+        +vector~JobEbpfMetrics~ drain(job_id)
+        +vector~int~ active_job_ids()
+    }
+
+    SchedulerServiceImpl *--> SchedulerDatabase : owns
+    SchedulerServiceImpl *--> JobSelector : owns
+    SchedulerDatabase ..|> ISchedulerDatabase
+    SchedulerDatabase --|> Database
+    JobSelector <|-- FCFSSelector
+    JobSelector <|-- SJFSelector
+    JobSelector <|-- AdaptiveSelector
+    JobSelector ..> ISchedulerDatabase : uses
+
+    JobExecutor <|-- StressCpuExecutor
+    JobExecutor <|-- StressMemExecutor
+    JobExecutor <|-- StressIOExecutor
+    JobExecutor <|-- MixedLoadExecutor
+
+    JobOrchestrator *--> JobHandle : manages
+    JobOrchestrator --> EbpfMetricStore : feeds
+    WorkerClient --> JobOrchestrator : orchestrates
+    WorkerClient --> MetricsCollector : reads
+    EbpfMonitor --> EbpfMetricStore : writes

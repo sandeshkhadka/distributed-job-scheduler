@@ -1,0 +1,165 @@
+---
+title: Analysis-Level Class Diagram
+---
+classDiagram
+    class SchedulerServiceImpl {
+        +SchedulerDb db
+        +JobSelector job_selector
+        +SubmitJob()
+        +GetJob()
+        +RegisterWorker()
+        +RegisterClient()
+        +ReportJobResult()
+        +ReportWorkerMetrics()
+        +ReportJobEbpfMetrics()
+        +ConfirmJobReceived()
+        +ReportJobStarted()
+        +GetJobTimeseries()
+        +GetJobStatus()
+    }
+
+    class JobSelector {
+        <<abstract>>
+        +name()
+        +select_job(worker, jobs, db)$
+    }
+
+    class FCFSSelector {
+        +select_job()
+    }
+
+    class SJFSelector {
+        +select_job()
+    }
+
+    class AdaptiveSelector {
+        +select_job()
+    }
+
+    class ISchedulerDatabase {
+        <<interface>>
+        +is_token_valid()
+        +get_worker_latest_metrics()
+        +get_avg_durations()
+        +get_avg_spikes()
+    }
+
+    class SchedulerDatabase {
+        +insert_job()
+        +get_job_by_id()
+        +register_worker()
+        +insert_worker_job()
+        +save_worker_metrics()
+        +save_job_result()
+        +save_job_analytics()
+        +save_ebpf_metrics()
+    }
+
+    class Database {
+        +insert_job()
+        +get_job_by_id()
+        +get_jobs_by_status()
+    }
+
+    class WorkerClient {
+        -stub_
+        -worker_id_
+        -token_
+        +Register()
+        +GetJob()
+        +confirm_job_received()
+        +report_job_started()
+        +report_job_result()
+        +report_worker_metrics()
+        +report_ebpf_metrics()
+    }
+
+    class JobOrchestrator {
+        +on_completed callback
+        -active_jobs_
+        +execute()
+        -monitor_loop()
+        -teardown_job()
+        -make_cgroup()
+        -remove_cgroup()
+    }
+
+    class JobExecutor {
+        <<abstract>>
+        +type()
+        +execute(params)$
+    }
+
+    class StressCpuExecutor {
+        +execute()
+    }
+
+    class StressMemExecutor {
+        +execute()
+    }
+
+    class StressIOExecutor {
+        +execute()
+    }
+
+    class MixedLoadExecutor {
+        +execute()
+    }
+
+    class MetricsCollector {
+        -prev_cpu_
+        -prev_net_
+        +collect()
+    }
+
+    class EbpfMonitor {
+        -obj_
+        -prog_
+        +load_and_attach()
+        +poll()
+        +detach()
+    }
+
+    class EbpfMetricStore {
+        -mutex_
+        -metrics_
+        +add_snapshot()
+        +drain()
+        +active_job_ids()
+    }
+
+    class JobSelectorRegistry {
+        -creators_
+        +init_all()
+        +create(name)
+    }
+
+    class ExecutorRegistry {
+        +init()$
+        +create(type)$
+    }
+
+    SchedulerServiceImpl *--> SchedulerDatabase
+    SchedulerServiceImpl *--> JobSelector
+    SchedulerDatabase ..|> ISchedulerDatabase
+    SchedulerDatabase --|> Database
+    WorkerDatabase --|> Database
+
+    JobSelector <|-- FCFSSelector
+    JobSelector <|-- SJFSelector
+    JobSelector <|-- AdaptiveSelector
+    JobSelector ..> ISchedulerDatabase : uses
+
+    JobExecutor <|-- StressCpuExecutor
+    JobExecutor <|-- StressMemExecutor
+    JobExecutor <|-- StressIOExecutor
+    JobExecutor <|-- MixedLoadExecutor
+
+    JobOrchestrator *--> JobExecutor
+    JobOrchestrator --> EbpfMetricStore
+
+    WorkerClient --> JobOrchestrator
+    WorkerClient --> MetricsCollector
+    WorkerClient --> EbpfMetricStore
+
+    EbpfMonitor --> EbpfMetricStore : feeds

@@ -1,0 +1,55 @@
+---
+title: Deployment Diagram
+---
+flowchart TB
+    subgraph SchedulerNode[Scheduler Node]
+        direction TB
+        SC([djs-sc])
+        SDB[(SQLite<br/>scheduler.db)]
+        SC --> SDB
+    end
+
+    subgraph DBServer[Database Server - Optional]
+        direction TB
+        PG[(PostgreSQL 16<br/>container)]
+    end
+
+    subgraph WorkerNode1[Worker Node 1]
+        direction TB
+        WK1([djs-wk])
+        EX1([djs-executor])
+        EBPF1([djs-ebpf-monitor])
+        WDB1[(workers.db)]
+        WK1 --> EX1
+        WK1 --> EBPF1
+        WK1 --> WDB1
+    end
+
+    subgraph WorkerNode2[Worker Node 2]
+        direction TB
+        WK2([djs-wk])
+        EX2([djs-executor])
+        EBPF2([djs-ebpf-monitor])
+        WDB2[(workers.db)]
+        WK2 --> EX2
+        WK2 --> EBPF2
+        WK2 --> WDB2
+    end
+
+    subgraph ClientMachine[Client Machine]
+        direction TB
+        CLI([djs-cli])
+        CDB[(cli.db)]
+        CLI --> CDB
+    end
+
+    subgraph AdminMachine[Admin Machine]
+        direction TB
+        ADM([admin])
+    end
+
+    SC <-->|gRPC :50051| WK1
+    SC <-->|gRPC :50051| WK2
+    CLI <-->|gRPC :50051| SC
+    ADM --> SC
+    SC -.->|optional :5432| PG
