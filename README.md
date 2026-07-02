@@ -18,6 +18,21 @@ sudo pacman -S clang cmake clang-tools-extra llvm-libs
 sudo pacman -S grpc protobuf
 ```
 
+### Test dependencies
+
+Google Test 1.15.2+ is required. Install it via your package manager or build
+from source.
+
+Fedora:
+```bash
+sudo dnf install gtest-devel
+```
+
+Arch:
+```bash
+sudo pacman -S gtest
+```
+
 ## Setup
 
 ```
@@ -32,6 +47,24 @@ git config core.hooksPath .githooks
 cmake -B build
 cmake --build build
 ```
+
+## Testing
+
+Tests use Google Test and cover selectors (FCFS, SJF, Adaptive), database schema
+operations, metric store, and metrics collection. Build tests separately with:
+
+```bash
+cmake -B build -DBUILD_TESTS=ON
+cmake --build build --target run_tests
+```
+
+Run the test binary:
+
+```bash
+./build/tests/run_tests
+```
+
+The test suite includes 22 unit tests across 6 suites (3 selectors, database, metric store, metrics collector). All tests run in ~2 ms and do not require root or libbpf-devel.
 
 ## Usage
 

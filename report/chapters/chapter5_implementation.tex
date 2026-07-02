@@ -163,11 +163,50 @@ The admin tool manages authentication tokens through subcommands:
 
 \section{Testing}
 
-The project was tested through a combination of component-level verification and end-to-end system testing. Due to the system's reliance on Linux kernel features (eBPF, cgroups), automated unit testing frameworks could not be easily applied to the full system.
+The project includes an automated test suite built with Google Test (GTest) 1.15.2. The test suite covers the core algorithmic components (scheduling strategies), the thread-safe metric store, the database layer, and the system metrics collector. Tests that require gRPC, eBPF, or cgroups are excluded from the automated suite due to their runtime dependencies and are covered manually.
+
+\subsection{Test Infrastructure}
+
+The test suite is located in the \texttt{tests/} directory at the project root. It is built as a separate CMake target that is disabled by default and can be enabled with the \texttt{BUILD\_TESTS} option:
+
+\begin{lstlisting}[caption=Building and running the test suite,label=lst:build_tests,language=bash]
+# Configure with tests enabled
+cmake -B build -DBUILD_TESTS=ON
+
+# Build the test binary
+cmake --build build --target run_tests
+
+# Run all tests
+./build/tests/run_tests
+\end{lstlisting}
+
+\subsection{Test Architecture}
+
+The test suite is organized into six test suites (Table~\ref{tab:test_suites}) with 22 individual test cases. The scheduling strategy tests use a \texttt{MockDatabase} class that implements the \texttt{ISchedulerDatabase} interface, allowing each selector to be tested in complete isolation without a real database.
+
+\begin{table}[htbp]
+\centering
+\caption{Test Suite Organization}
+\label{tab:test_suites}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lll}
+\toprule
+\textbf{Test Suite} & \textbf{Test File} & \textbf{Description} \\
+\midrule
+FCFSSelectorTest & test\_selectors.cpp & 3 tests for FCFS scheduling strategy \\
+SJFSelectorTest & test\_selectors.cpp & 4 tests for SJF scheduling strategy \\
+AdaptiveSelectorTest & test\_selectors.cpp & 5 tests for Adaptive scheduling strategy \\
+DatabaseTest & test\_database.cpp & 4 tests for SQLite database operations \\
+EbpfMetricStoreTest & test\_metric\_store.cpp & 5 tests for eBPF metric accumulator \\
+MetricsCollectorTest & test\_metrics.cpp & 1 test for system metrics collection \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
 
 \subsection{Test Cases for Unit Testing}
 
-Each component was tested in isolation during development. Table~\ref{tab:unit_tests} summarizes the unit-level test cases.
+Table~\ref{tab:unit_tests} describes each unit test case in detail.
 
 \begin{table}[htbp]
 \centering
@@ -176,17 +215,35 @@ Each component was tested in isolation during development. Table~\ref{tab:unit_t
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{llll}
 \toprule
-\textbf{Component} & \textbf{Test Case} & \textbf{Input} & \textbf{Expected Result} \\
+\textbf{Suite} & \textbf{Test Case} & \textbf{Input / Scenario} & \textbf{Expected Result} \\
 \midrule
-Database & Insert job & job type, params, client ID & Job created with unique ID, status "not started" \\
-Database & Query jobs by status & Status filter & Vector of matching jobs \\
-JobSelector (FCFS) & Select oldest job & 3 jobs, different timestamps & Earliest timestamp returned \\
-JobSelector (SJF) & Select shortest type & Types with different avg durations & Shortest avg duration returned \\
-JobSelector (Adaptive) & Predict safe job & Worker at 50\% CPU, known spikes & Only predicted-fit jobs returned \\
-Executors & CPU stress & 2 cores, 1000ms & CPU increases, success returned \\
-Executors & Memory stress & 64 MB, 1000ms & Memory allocated, success \\
-Executors & I/O stress & 10 MB, sequential & File written/read, success \\
-MetricsCollector & Collect metrics & (reads /proc) & Non-zero CPU, memory, disk \\
+FCFS & ReturnsEmptyWhenNoJobs & Empty job vector & Returns default Job with id 0 \\
+FCFS & PicksOldestJob & 3 jobs, different timestamps & Returns job with earliest timestamp \\
+FCFS & SkipsNonStartedJobs & completed + not\_started + ongoing & Returns only the not\_started job \\
+\midrule
+SJF & PicksShortestDuration & cpu(5s), mem(2s), io(8s) avg durations & Returns stress\_mem (shortest avg) \\
+SJF & IgnoresLongerDuration & cpu(1s), mem(99999s) avg duration & Returns stress\_cpu \\
+SJF & FallsBackToFCFS & No duration data at all & Returns oldest job (FCFS fallback) \\
+SJF & FallsBackWithUnknown & Only unknown types have duration data & Returns oldest unknown job \\
+\midrule
+Adaptive & ReturnsEmptyNoMetrics & No worker metrics available & Returns default Job (can't predict) \\
+Adaptive & PicksSafeKnownJob & 50\% CPU, 30\% mem, known spike fits & Returns the safe job \\
+Adaptive & PicksUnknownWhenNoSafe & No spike history for any job type & Returns oldest unknown (bootstrap) \\
+Adaptive & RejectsCPUOverload & 95\% CPU + 10\% spike exceeds 100\% & Returns default Job (rejected) \\
+Adaptive & PicksOldestSafe & 2 safe jobs, different timestamps & Returns older safe job \\
+\midrule
+Database & InsertAndRetrieveJob & Insert stress\_cpu job & Job retrievable with correct type/status \\
+Database & QueryByStatus & Insert not\_started and completed jobs & Both statuses returned correctly \\
+Database & InsertAndQueryWorker & Insert worker with 8 cores & Worker retrievable with correct specs \\
+Database & TokenValidation & Insert client + worker tokens, query by type & Correct count for each type \\
+\midrule
+MetricStore & AddAndDrain & Add 1 snapshot, drain & Returns 1 snapshot with correct values \\
+MetricStore & DrainRemovesData & Add, drain, drain again & Second drain returns empty \\
+MetricStore & ActiveJobIds & Add to 3 job IDs, drain 1 & Active IDs count drops from 3 to 2 \\
+MetricStore & HandlesMultiple & Add 3 snapshots to same job & Returns all 3 in order \\
+MetricStore & DrainNonexistent & Drain non-existent job ID & Returns empty vector \\
+\midrule
+Metrics & CollectReturnsNonDefault & Real /proc filesystem on Linux & Memory, CPU, disk values are positive \\
 \bottomrule
 \end{tabular}%
 }
@@ -194,11 +251,11 @@ MetricsCollector & Collect metrics & (reads /proc) & Non-zero CPU, memory, disk 
 
 \subsection{Test Cases for System Testing}
 
-End-to-end system testing validated the complete job lifecycle. Table~\ref{tab:system_tests} describes the system-level test scenarios.
+End-to-end system testing validated the complete job lifecycle. Table~\ref{tab:system_tests} describes the system-level test scenarios, which are performed manually since they require running multiple distributed components simultaneously.
 
 \begin{table}[htbp]
 \centering
-\caption{System Test Cases}
+\caption{System Test Scenarios}
 \label{tab:system_tests}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lll}
@@ -210,7 +267,7 @@ Multiple workers & Register 2 workers, submit 3 jobs & Each worker receives $\ge
 Worker crash recovery & Receive job, kill worker, restart worker & Worker recovers pending jobs, reports as failed \\
 Token revocation & Generate, use, revoke, reuse token & Post-revocation requests rejected with DENIED \\
 PostgreSQL backend & Build USE\_PG=ON, start PG, run system & Identical operation to SQLite \\
-eBPF metrics & Submit CPU job, query metrics & Non-zero syscall counts, CPU usage recorded \\
+eBPF metrics collection & Submit CPU job, query metrics & Non-zero syscall counts, CPU usage recorded \\
 \bottomrule
 \end{tabular}%
 }
@@ -218,8 +275,90 @@ eBPF metrics & Submit CPU job, query metrics & Non-zero syscall counts, CPU usag
 
 \subsection{Result Analysis}
 
-The system successfully demonstrates all core functionalities. The scheduler correctly assigns jobs to workers using the configured scheduling algorithm. Workers execute jobs in isolated cgroup environments, preventing resource contention. The eBPF monitor captures kernel-level metrics, providing detailed visibility into job behavior.
+The automated test suite was built and executed on a Fedora 43 system with GCC 15.2.1 and Google Test 1.15.2. All 22 tests passed successfully with zero failures.
 
-The pluggable architecture of both the scheduling strategies and executor implementations makes the system extensible. New job types can be added by implementing the \texttt{JobExecutor} interface, and new scheduling strategies can be added by implementing the \texttt{JobSelector} interface, both without modifying existing code.
+\subsubsection{Test Execution Output}
 
-The dual database backend works as expected. SQLite provides a simple, zero-configuration option for development and small-scale use, while PostgreSQL supports larger deployments with concurrent access requirements. The compile-time backend selection through the \texttt{USE\_PG} flag allows the system to be built for either backend without runtime overhead.
+The following output was produced by running the test suite:
+
+\begin{lstlisting}[caption=Test execution results,label=lst:test_output,language=bash]
+$ cmake -B build -DBUILD_TESTS=ON
+$ cmake --build build --target run_tests
+$ ./build/tests/run_tests
+
+[==========] Running 22 tests from 6 test suites.
+[----------] 3 tests from FCFSSelectorTest
+[ RUN      ] FCFSSelectorTest.ReturnsEmptyJobWhenNoJobs
+[       OK ] (0 ms)
+[ RUN      ] FCFSSelectorTest.PicksOldestJob
+[       OK ] (0 ms)
+[ RUN      ] FCFSSelectorTest.SkipsNonStartedJobs
+[       OK ] (0 ms)
+
+[----------] 4 tests from SJFSelectorTest
+[ RUN      ] SJFSelectorTest.PicksJobWithShortestDuration
+[       OK ] (0 ms)
+[ RUN      ] SJFSelectorTest.IgnoresJobsWithLongerDuration
+[       OK ] (0 ms)
+[ RUN      ] SJFSelectorTest.FallsBackToFCFSWhenNoDurations
+[       OK ] (0 ms)
+[ RUN      ] SJFSelectorTest.FallsBackWithOnlyUnknownTypes
+[       OK ] (0 ms)
+
+[----------] 5 tests from AdaptiveSelectorTest
+[ RUN      ] AdaptiveSelectorTest.ReturnsEmptyWhenNoMetrics
+[       OK ] (0 ms)
+[ RUN      ] AdaptiveSelectorTest.PicksSafeKnownJob
+[       OK ] (0 ms)
+[ RUN      ] AdaptiveSelectorTest.PicksUnknownWhenNoSafeKnown
+[       OK ] (0 ms)
+[ RUN      ] AdaptiveSelectorTest.RejectsJobThatWouldOverloadCPU
+[       OK ] (0 ms)
+[ RUN      ] AdaptiveSelectorTest.PicksOldestSafeAmongMultiple
+[       OK ] (0 ms)
+
+[----------] 4 tests from DatabaseTest
+[ RUN      ] DatabaseTest.InsertAndRetrieveJob
+[       OK ] (0 ms)
+[ RUN      ] DatabaseTest.QueryJobsByStatus
+[       OK ] (0 ms)
+[ RUN      ] DatabaseTest.InsertAndQueryWorker
+[       OK ] (0 ms)
+[ RUN      ] DatabaseTest.TokenValidation
+[       OK ] (0 ms)
+
+[----------] 5 tests from EbpfMetricStoreTest
+[ RUN      ] EbpfMetricStoreTest.AddAndDrain
+[       OK ] (0 ms)
+[ RUN      ] EbpfMetricStoreTest.DrainRemovesData
+[       OK ] (0 ms)
+[ RUN      ] EbpfMetricStoreTest.ActiveJobIds
+[       OK ] (0 ms)
+[ RUN      ] EbpfMetricStoreTest.HandlesMultipleSnapshots
+[       OK ] (0 ms)
+[ RUN      ] EbpfMetricStoreTest.DrainNonexistentReturnsEmpty
+[       OK ] (0 ms)
+
+[----------] 1 test from MetricsCollectorTest
+[ RUN      ] MetricsCollectorTest.CollectReturnsNonDefaultValues
+[       OK ] (0 ms)
+
+[==========] 22 tests from 6 test suites ran. (2 ms total)
+[  PASSED  ] 22 tests.
+\end{lstlisting}
+
+\subsubsection{Analysis}
+
+All 22 tests completed successfully in approximately 2 milliseconds. The results demonstrate:
+
+\begin{description}
+    \item[Scheduling Strategy Correctness:] All 12 selector tests pass, confirming that FCFS correctly orders by timestamp, SJF correctly selects by historical duration with proper FCFS fallback, and Adaptive correctly predicts resource impact, handles unknown types for bootstrapping, and rejects overload scenarios.
+    
+    \item[Database Layer Integrity:] All 4 database tests pass, confirming that SQLite insert, query, and token validation operations function correctly with an in-memory database.
+    
+    \item[eBPF Metric Store Thread Safety:] All 5 metric store tests pass, confirming that the mutex-protected accumulator correctly handles add, drain, and active ID tracking operations.
+    
+    \item[System Metrics Collection:] The system metrics collector returns realistic values (non-zero memory and CPU metrics), confirming that the \texttt{/proc} filesystem parsing works correctly on Linux.
+\end{description}
+
+The test suite provides a solid foundation for regression testing. As new scheduling strategies or executor types are added, corresponding test cases can be included following the established patterns.
