@@ -1,0 +1,57 @@
+\section{Screenshots}
+
+\placeholderfig{screenshot_scheduler_startup}{Screenshot showing the scheduler starting up and listening on port 50051}
+
+\placeholderfig{screenshot_cli_submit}{Screenshot showing job submission via the CLI client}
+
+\placeholderfig{screenshot_worker_active}{Screenshot showing an active worker executing a job}
+
+\placeholderfig{screenshot_admin_tokens}{Screenshot showing token management via the admin tool}
+
+\section{Source Code Snippets}
+
+\subsection{Scheduler Service Interface (Proto Definition)}
+
+\lstinputlisting[language=,caption=Protobuf service definition for the scheduler]{../proto/scheduler.proto}
+
+\subsection{Scheduler Service Implementation (Key RPCs)}
+
+\lstinputlisting[language=C++,caption=SchedulerServiceImpl core methods,firstline=1,lastline=100]{../scheduler/scheduler_service_impl.cpp}
+
+\subsection{Job Selector Interface}
+
+\lstinputlisting[language=C++,caption=Abstract JobSelector interface]{../scheduler/job_selector.hpp}
+
+\subsection{Adaptive Scheduling Algorithm}
+
+\lstinputlisting[language=C++,caption=AdaptiveSelector implementation]{../scheduler/selectors/adaptive_selector.cpp}
+
+\subsection{Job Executor Interface}
+
+\lstinputlisting[language=C++,caption=Abstract JobExecutor interface]{../worker/executors/job_executor.hpp}
+
+\subsection{eBPF Monitor BPF Program}
+
+\lstinputlisting[language=C,caption=BPF C program for monitoring system calls]{../worker/ebpf/bpf/job_monitor.bpf.c}
+
+\section{Log of Visits to Supervisor}
+
+\begin{table}[htbp]
+\centering
+\caption{Supervisor Meeting Log}
+\label{tab:supervisor_log}
+\begin{tabularx}{\textwidth}{lllX}
+\toprule
+\textbf{S.No.} & \textbf{Date} & \textbf{Duration} & \textbf{Agenda / Discussion Points} \\
+\midrule
+1 & [Date] & [Duration] & [Discussion points] \\
+2 & [Date] & [Duration] & [Discussion points] \\
+3 & [Date] & [Duration] & [Discussion points] \\
+4 & [Date] & [Duration] & [Discussion points] \\
+5 & [Date] & [Duration] & [Discussion points] \\
+6 & [Date] & [Duration] & [Discussion points] \\
+7 & [Date] & [Duration] & [Discussion points] \\
+8 & [Date] & [Duration] & [Discussion points] \\
+\bottomrule
+\end{tabularx}
+\end{table}

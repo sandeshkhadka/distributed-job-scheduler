@@ -1,0 +1,225 @@
+\chapter{Implementation and Testing}
+
+\section{Implementation}
+
+This chapter describes the implementation of the Distributed Job Scheduler system, covering the tools and technologies used, the implementation details of each module, and the testing approach.
+
+\subsection{Tools Used}
+
+\subsubsection{Programming Languages and Frameworks}
+
+\begin{description}
+    \item[C++20:] The entire system is implemented in C++20, chosen for its performance characteristics, systems-level programming capabilities, and modern language features including smart pointers, lambda expressions, move semantics, multithreading support via \texttt{std::thread}, and the standard template library.
+    
+    \item[CMake 3.20+:]: The build system uses CMake for cross-platform configuration, with custom commands for gRPC code generation and eBPF compilation.
+    
+    \item[gRPC:] High-performance RPC framework used for all inter-component communication. gRPC was chosen over HTTP/REST for its strongly-typed contracts via Protocol Buffers, efficient binary serialization, and built-in support for bidirectional streaming.
+    
+    \item[Protocol Buffers:] Used as both the Interface Definition Language (IDL) and serialization format. The \texttt{scheduler.proto} file defines the complete service contract with 11 RPC methods and 14 message types.
+\end{description}
+
+\subsubsection{Database Systems}
+
+\begin{description}
+    \item[SQLite3:] The default database backend. Provides lightweight, file-based storage without requiring a separate database server. Suitable for development, testing, and small-scale deployments.
+    
+    \item[PostgreSQL 16:] Optional backend for production-scale deployments. Provides better concurrency handling, more sophisticated indexing, and robustness for large volumes of metrics data.
+\end{description}
+
+\subsubsection{Operating System and Kernel Technologies}
+
+\begin{description}
+    \item[Linux Kernel (4.18+):] The target platform. All worker functionality depends on Linux-specific features.
+    
+    \item[libbpf:] Userspace library for loading, attaching, and interacting with eBPF programs. Provides a stable API for BPF operations.
+    
+    \item[eBPF:] In-kernel program execution framework. Used for real-time monitoring of job system calls, I/O, and network activity through the \texttt{raw\_syscalls/sys\_enter} tracepoint.
+    
+    \item[cgroups v2:] Linux control groups for resource isolation. Each job runs in a dedicated cgroup under \texttt{/sys/fs/cgroup/djs/jobs/<job\_id>}.
+\end{description}
+
+\subsubsection{Build and Development Tools}
+
+\begin{description}
+    \item[Clang:] The recommended C++ compiler. Also used to compile the BPF C program with the \texttt{-target bpf} flag.
+    
+    \item[clang-format:] Code formatting tool used in the pre-commit hook to enforce consistent C++ code style.
+    
+    \item[Docker Compose:] Provides a PostgreSQL 16 container for development and testing of the PostgreSQL backend.
+\end{description}
+
+\subsection{Implementation Details of Modules}
+
+This section describes the implementation of each major module in the system, organized by component.
+
+\subsubsection{Shared Library Module}
+
+The shared library provides foundational classes used by all other components:
+
+\begin{itemize}
+    \item \textbf{Database class:} Provides the base database interface with methods for job CRUD operations (\texttt{insert\_job}, \texttt{get\_job\_by\_id}, \texttt{get\_jobs\_by\_status}, etc.). Uses SQLite3 C API internally.
+    \item \textbf{SQLiteDB:} A thread-safe singleton wrapper around the SQLite3 C API. Implements WAL (Write-Ahead Logging) mode for better concurrent read performance and uses a \texttt{std::mutex} for write serialization.
+    \item \textbf{Logger:} Simple logging utility with three levels (Debug, Info, Error) and file/console output support.
+\end{itemize}
+
+\subsubsection{Scheduler Module}
+
+The scheduler is the central component of the system. Its implementation is structured as follows:
+
+\textbf{SchedulerServiceImpl:} Implements all 11 gRPC RPC methods defined in \texttt{scheduler.proto}. The implementation follows a consistent pattern: extract authentication token from metadata, validate via \texttt{check\_auth()}, perform the operation, and return the response. Key RPC implementations:
+
+\begin{itemize}
+    \item \texttt{SubmitJob}: Deserializes the JSON params string, creates a job record with status \texttt{"not started"}, and returns the job ID.
+    \item \texttt{GetJob}: The core scheduling RPC. Fetches all jobs with status \texttt{"not started"}, retrieves the worker's latest metrics, and passes both to the \texttt{JobSelector::select\_job()} method. The selected job is then associated with the worker via the \texttt{job\_worker} join table and its status is updated to \texttt{"ongoing"}.
+    \item \texttt{ReportJobResult}: Updates the job status to \texttt{"completed"} or \texttt{"failed"}, computes runtime analytics (duration, CPU/memory spikes), and stores both the result and analytics data.
+    \item \texttt{ReportWorkerMetrics}: Uses \texttt{INSERT OR REPLACE} to maintain a single-row metrics record per worker, ensuring only the latest snapshot is retained.
+\end{itemize}
+
+\textbf{Authentication:} The \texttt{check\_auth()} function extracts the Bearer token from the gRPC metadata, validates it against the database (\texttt{is\_token\_valid}), and returns either \texttt{UNAUTHENTICATED} (missing token), \texttt{PERMISSION\_DENIED} (invalid/revoked token), or OK.
+
+\textbf{Database selection:} The \texttt{SchedulerDb} typedef resolves to either \texttt{SchedulerDatabase} (SQLite) or \texttt{PgSchedulerDatabase} (PostgreSQL) based on the \texttt{USE\_PG} compile-time flag, enabling backend selection without code changes.
+
+\subsubsection{Worker Module}
+
+The worker module is the most complex component, managing job polling, execution, monitoring, and metrics reporting.
+
+\textbf{Main Loop (worker.cpp):} The worker's main function performs the following operations in a loop with a 2-second interval:
+\begin{enumerate}
+    \item If not registered, call \texttt{WorkerClient::Register()} with the token.
+    \item Call \texttt{WorkerClient::GetJob()} to poll for a new job assignment.
+    \item If a job is received, call \texttt{JobOrchestrator::execute()} to run it.
+    \item Call \texttt{report\_pending\_results()} to push any buffered results to the scheduler.
+    \item Collect and report system metrics via \texttt{MetricsCollector::collect()} and \texttt{WorkerClient::report\_worker\_metrics()}.
+    \item Drain and report eBPF metrics via \texttt{EbpfMetricStore::drain()} and \texttt{WorkerClient::report\_ebpf\_metrics()}.
+\end{enumerate}
+
+\textbf{JobOrchestrator:} Manages job execution through the following steps:
+
+\begin{enumerate}
+    \item \textbf{Cgroup creation:} Creates a cgroup v2 directory at \texttt{/sys/fs/cgroup/djs/jobs/<job\_id>} with appropriate permissions.
+    \item \textbf{Process forking:} Creates a pipe for stdout capture, then forks a child process. The child calls \texttt{execvp()} to run the \texttt{djs-executor} binary with the job type and parameters.
+    \item \textbf{eBPF monitor:} Optionally forks the \texttt{djs-ebpf-monitor} process, attaching it to the job's cgroup for kernel-level monitoring.
+    \item \textbf{Cgroup assignment:} Writes the child PID to \texttt{cgroup.procs} to place it under the cgroup's resource controls.
+    \item \textbf{Monitoring:} A reaper thread (\texttt{monitor\_loop}) calls \texttt{waitpid(-1, \&status, 0)} to wait for child process termination.
+    \item \textbf{Result collection:} Reads the executor's JSON output from the pipe and parses it.
+    \item \textbf{Cleanup:} Joins the eBPF reader thread, removes the cgroup directory, and invokes the \texttt{on\_completed} callback.
+\end{enumerate}
+
+\textbf{Crash recovery:} On startup, \texttt{recover\_pending\_jobs()} checks for any jobs in non-terminal states (\texttt{received}, \texttt{scheduled}, \texttt{started}, \texttt{ongoing}) and automatically reports them as failed to the scheduler.
+
+\subsubsection{Executor Implementations}
+
+Each executor type implements the \texttt{JobExecutor} interface:
+
+\begin{itemize}
+    \item \textbf{StressCpuExecutor:} Creates N threads that each perform a busy loop of mathematical operations (square root, sine, cosine) for the specified duration. The thread count and duration are configurable through job parameters.
+    \item \textbf{StressMemExecutor:} Allocates a specified amount of memory using \texttt{malloc}, initializes it with \texttt{memset}, and holds the allocation for the specified duration before freeing it.
+    \item \textbf{StressIOExecutor:} Creates a temporary file and performs write and read operations. The access mode (sequential, random) and I/O size are configurable.
+    \item \textbf{MixedLoadExecutor:} Spawns concurrent CPU, memory, and I/O stress threads, each with configurable parameters. The thread counts for each stress type are independently configurable.
+\end{itemize}
+
+\subsubsection{eBPF Monitor Module}
+
+The eBPF monitor consists of two parts: the in-kernel BPF program and the userspace monitor.
+
+\textbf{BPF Program (job\_monitor.bpf.c):} Attaches to the \texttt{raw\_syscalls/sys\_enter} tracepoint. For each system call entry, it:
+\begin{enumerate}
+    \item Checks whether the current process belongs to the monitored cgroup by reading the cgroup ID.
+    \item Increments the appropriate counter in a per-CPU BPF array.
+    \item For read/write syscalls, accumulates byte counts in an I/O bytes map.
+    \item For sendto/recvfrom syscalls, accumulates byte counts in a network bytes map.
+\end{enumerate}
+
+\textbf{EbpfMonitor (userspace):}
+\begin{itemize}
+    \item Loads the compiled BPF object (\texttt{job\_monitor.bpf.o}) using libbpf APIs.
+    \item Attaches the BPF program to the tracepoint and stores the link for later detachment.
+    \item Every 2 seconds, reads the per-CPU BPF maps (summing across all CPUs), and also reads \texttt{cpu.stat} and \texttt{memory.current} from the cgroup filesystem.
+    \item Outputs the combined snapshot as a JSON line to stdout for consumption by the worker.
+\end{itemize}
+
+\subsubsection{CLI Client Module}
+
+The CLI client provides a command-line interface for users to interact with the scheduler. It uses the \texttt{CliParser} class (based on the third-party \texttt{argparse.hpp} library) with subcommands:
+
+\begin{itemize}
+    \item \texttt{register --token <token>}: Registers the client with the scheduler.
+    \item \texttt{submit --type <type> --param <key=value> ...}: Submits a job with specified type and parameters.
+    \item \texttt{query --job-id <id>}: Queries the status of a specific job.
+    \item \texttt{cancel --job-id <id>}: Cancels a pending job.
+    \item \texttt{list}: Lists all jobs for the registered client.
+\end{itemize}
+
+\subsubsection{Admin Module}
+
+The admin tool manages authentication tokens through subcommands:
+
+\begin{itemize}
+    \item \texttt{gen-token --type client/worker --description <text>}: Generates a new token as a cryptographically random 64-character hex string (read from \texttt{/dev/urandom}).
+    \item \texttt{list-tokens}: Lists all tokens with their type, status, and creation date.
+    \item \texttt{revoke-token --token-id <id>}: Revokes an active token.
+    \item \texttt{usage --token-id <id>}: Shows token usage statistics.
+\end{itemize}
+
+\section{Testing}
+
+The project was tested through a combination of component-level verification and end-to-end system testing. Due to the system's reliance on Linux kernel features (eBPF, cgroups), automated unit testing frameworks could not be easily applied to the full system.
+
+\subsection{Test Cases for Unit Testing}
+
+Each component was tested in isolation during development. Table~\ref{tab:unit_tests} summarizes the unit-level test cases.
+
+\begin{table}[htbp]
+\centering
+\caption{Unit Test Cases}
+\label{tab:unit_tests}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llll}
+\toprule
+\textbf{Component} & \textbf{Test Case} & \textbf{Input} & \textbf{Expected Result} \\
+\midrule
+Database & Insert job & job type, params, client ID & Job created with unique ID, status "not started" \\
+Database & Query jobs by status & Status filter & Vector of matching jobs \\
+JobSelector (FCFS) & Select oldest job & 3 jobs, different timestamps & Earliest timestamp returned \\
+JobSelector (SJF) & Select shortest type & Types with different avg durations & Shortest avg duration returned \\
+JobSelector (Adaptive) & Predict safe job & Worker at 50\% CPU, known spikes & Only predicted-fit jobs returned \\
+Executors & CPU stress & 2 cores, 1000ms & CPU increases, success returned \\
+Executors & Memory stress & 64 MB, 1000ms & Memory allocated, success \\
+Executors & I/O stress & 10 MB, sequential & File written/read, success \\
+MetricsCollector & Collect metrics & (reads /proc) & Non-zero CPU, memory, disk \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\subsection{Test Cases for System Testing}
+
+End-to-end system testing validated the complete job lifecycle. Table~\ref{tab:system_tests} describes the system-level test scenarios.
+
+\begin{table}[htbp]
+\centering
+\caption{System Test Cases}
+\label{tab:system_tests}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lll}
+\toprule
+\textbf{Test Scenario} & \textbf{Steps} & \textbf{Expected Result} \\
+\midrule
+Complete job lifecycle & Register client, submit job, worker polls, execute, report & Job reaches "completed" status through all states \\
+Multiple workers & Register 2 workers, submit 3 jobs & Each worker receives $\ge$ 1 job, scheduler balances \\
+Worker crash recovery & Receive job, kill worker, restart worker & Worker recovers pending jobs, reports as failed \\
+Token revocation & Generate, use, revoke, reuse token & Post-revocation requests rejected with DENIED \\
+PostgreSQL backend & Build USE\_PG=ON, start PG, run system & Identical operation to SQLite \\
+eBPF metrics & Submit CPU job, query metrics & Non-zero syscall counts, CPU usage recorded \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\subsection{Result Analysis}
+
+The system successfully demonstrates all core functionalities. The scheduler correctly assigns jobs to workers using the configured scheduling algorithm. Workers execute jobs in isolated cgroup environments, preventing resource contention. The eBPF monitor captures kernel-level metrics, providing detailed visibility into job behavior.
+
+The pluggable architecture of both the scheduling strategies and executor implementations makes the system extensible. New job types can be added by implementing the \texttt{JobExecutor} interface, and new scheduling strategies can be added by implementing the \texttt{JobSelector} interface, both without modifying existing code.
+
+The dual database backend works as expected. SQLite provides a simple, zero-configuration option for development and small-scale use, while PostgreSQL supports larger deployments with concurrent access requirements. The compile-time backend selection through the \texttt{USE\_PG} flag allows the system to be built for either backend without runtime overhead.

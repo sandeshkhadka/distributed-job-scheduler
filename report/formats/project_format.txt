@@ -1,0 +1,23 @@
+1. Cover & Title Page 
+
+2. Certificate Page 
+i. Supervisor Recommendation 
+ii. Head / Program Coordinator, Supervisor, Internal and External Examiners’
+Approval Letter 
+
+3. Acknowledgement 
+
+4. Abstract Page 
+
+5. Table of Contents 
+
+6. List of Abbreviations, List of Figures, List of Tables 
+
+7. Main Report 
+
+8. References  
+
+9. Bibliography (if any) 
+
+10. Appendices (Screenshots + Snippets of major source code components +  Log of
+visits to supervisor) 

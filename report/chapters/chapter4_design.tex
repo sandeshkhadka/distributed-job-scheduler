@@ -1,0 +1,266 @@
+\chapter{System Design}
+
+\section{Design}
+
+This chapter presents the detailed design of the Distributed Job Scheduler system. Following the object-oriented approach established in the analysis chapter, it covers the refined class design, component architecture, deployment architecture, algorithm details, and database design.
+
+\subsection{Refined Class Diagrams}
+
+The refined class diagrams provide detailed attributes, method signatures, and relationships for the core classes identified during analysis.
+
+\placeholderfig{refined_class_diagram}{Refined class diagram showing detailed class structures and relationships}
+
+\subsubsection{Scheduler-Side Classes}
+
+\begin{description}
+    \item[SchedulerServiceImpl:] Implements the \texttt{djs::SchedulerService::Service} gRPC interface. Contains a \texttt{SchedulerDb} (typedef resolving to either \texttt{SchedulerDatabase} or \texttt{PgSchedulerDatabase}) and a \texttt{std::unique\_ptr<JobSelector>} for the strategy. Key methods include \texttt{SubmitJob}, \texttt{GetJob}, \texttt{RegisterWorker}, and \texttt{ReportJobResult}.
+    
+    \item[JobSelector (abstract):] Declares the pure virtual method \texttt{select\_job(const Worker\&, const std::vector<Job>\&, ISchedulerDatabase\&)} and the \texttt{name()} accessor. Three concrete implementations exist:
+    \begin{itemize}
+        \item \textbf{FCFSSelector:} Selects the job with the earliest \texttt{created\_at} timestamp.
+        \item \textbf{SJFSelector:} Selects the job type with the shortest historical average duration, falling back to FCFS.
+        \item \textbf{AdaptiveSelector:} Predicts resource impact using historical spikes and selects the oldest safe job.
+    \end{itemize}
+    
+    \item[JobSelectorRegistry:] Implements the Factory pattern. Maintains a map of string names to factory function pointers. The \texttt{create(name)} method instantiates the appropriate selector. Registered names include \texttt{"fcfs"}, \texttt{"sjf"}, and \texttt{"adaptive"}.
+    
+    \item[SchedulerDatabase:] Inherits from both \texttt{Database} (shared SQLite base) and \texttt{ISchedulerDatabase} (narrow strategy interface). Provides complete CRUD operations for jobs, workers, clients, tokens, metrics, and analytics.
+    
+    \item[ISchedulerDatabase:] Pure virtual interface with methods: \texttt{is\_token\_valid}, \texttt{get\_worker\_latest\_metrics}, \texttt{get\_avg\_durations}, \texttt{get\_avg\_spikes}. This narrow interface ensures that scheduling strategies access only the data they need.
+\end{description}
+
+\subsubsection{Worker-Side Classes}
+
+\begin{description}
+    \item[WorkerClient:] Wraps the gRPC \texttt{SchedulerService::Stub}. Manages the worker identity (cached in \texttt{WorkerDatabase}), authentication, and all RPC communication with the scheduler. Key methods: \texttt{Register}, \texttt{GetJob}, \texttt{confirm\_job\_received}, \texttt{report\_job\_started}, \texttt{report\_job\_result}, \texttt{report\_worker\_metrics}, \texttt{report\_ebpf\_metrics}.
+    
+    \item[WorkerDatabase:] Inherits from \texttt{Database}. Stores the worker's registered ID, authentication token, pending job results, and active job records. Used for crash recovery on restart.
+    
+    \item[JobOrchestrator:] Manages the complete lifecycle of job execution. Contains a map of active job handles, a monitoring thread for child process reaping, and per-job eBPF reader threads. Key methods: \texttt{execute(job\_id, job\_type, params)} creates cgroup, forks executor, and monitors execution. The \texttt{on\_completed} callback (\texttt{std::function}) is invoked when a job finishes.
+    
+    \item[JobExecutor (abstract):] Declares \texttt{execute(const std::map<std::string, std::string>\& params)} returning \texttt{JobResult}. Concrete implementations:
+    \begin{itemize}
+        \item \textbf{StressCpuExecutor:} Spawns N threads running CPU-intensive operations (sqrt, sin, cos).
+        \item \textbf{StressMemExecutor:} Allocates N MB of memory with memset and holds it for the specified duration.
+        \item \textbf{StressIOExecutor:} Performs file write/read operations on a temporary file.
+        \item \textbf{MixedLoadExecutor:} Concurrently runs CPU, memory, and I/O stress threads.
+    \end{itemize}
+    
+    \item[MetricsCollector:] Reads \texttt{/proc/stat}, \texttt{/proc/meminfo}, \texttt{/proc/net/dev}, and \texttt{statvfs} to collect system-level metrics. Tracks deltas for CPU and network rates.
+    
+    \item[EbpfMonitor:] Uses libbpf to load and attach a BPF program to the \texttt{raw\_syscalls/sys\_enter} tracepoint. Periodically reads per-CPU BPF maps and cgroup files to produce metric snapshots.
+    
+    \item[EbpfMetricStore:] Thread-safe accumulator with mutex-guarded \texttt{add\_snapshot} (called from eBPF reader threads) and \texttt{drain} (called from the main metrics reporting loop).
+\end{description}
+
+\subsection{Component Diagrams}
+
+The component diagram (Figure~\ref{fig:component_diagram}) illustrates the high-level software components and their dependencies.
+
+\placeholderfig{component_diagram}{Component diagram showing system modules and their inter-dependencies}
+
+The system is organized into the following components:
+
+\begin{description}
+    \item[Shared Library:] Contains the \texttt{Database} base class, \texttt{Logger}, and \texttt{argparse.hpp}. Linked by all other components.
+    
+    \item[Scheduler Component:] Contains \texttt{SchedulerServiceImpl}, \texttt{SchedulerDatabase} (or \texttt{PgSchedulerDatabase}), \texttt{JobSelector} hierarchy, and \texttt{JobSelectorRegistry}. Exposes the gRPC service on port 50051.
+    
+    \item[Worker Component:] Contains \texttt{WorkerClient}, \texttt{WorkerDatabase}, \texttt{JobOrchestrator}, \texttt{MetricsCollector}, and \texttt{EbpfMetricStore}. Depends on the \texttt{Executor Implementation} library and the \texttt{djs-ebpf-monitor} binary.
+    
+    \item[Executor Implementation Library:] Static library containing all \texttt{JobExecutor} implementations. Linked by both the Worker and the standalone \texttt{djs-executor} binary.
+    
+    \item[CLI Component:] Contains \texttt{SchedulerClient} (gRPC client wrapper), \texttt{CliDatabase}, and \texttt{CliParser}. Provides the \texttt{djs-cli} executable.
+    
+    \item[Admin Component:] Contains \texttt{AdminDatabase} (or \texttt{PgAdminDatabase}). Provides token management functionality.
+    
+    \item[eBPF Monitor:] Standalone binary (\texttt{djs-ebpf-monitor}) that loads the BPF object, attaches tracepoints, and outputs JSON metrics to stdout.
+    
+    \item[djs-executor:] Minimal standalone binary that parses \texttt{--type} and \texttt{--param} arguments, creates the appropriate executor, and prints JSON results to stdout.
+    
+    \item[Proto Library:] Contains the generated gRPC and Protobuf code from \texttt{scheduler.proto}.
+\end{description}
+
+\subsection{Deployment Diagrams}
+
+The deployment diagram (Figure~\ref{fig:deployment_diagram}) shows the physical deployment of components across nodes.
+
+\placeholderfig{deployment_diagram}{Deployment diagram showing the distributed deployment architecture}
+
+The system is deployed as follows:
+
+\begin{description}
+    \item[Scheduler Node:] Runs the \texttt{djs-sc} binary (scheduler). Connects to the database (SQLite file or PostgreSQL server). Listens on TCP port 50051 for incoming gRPC connections.
+    
+    \item[Database Server:] Either a local SQLite file (\texttt{scheduler.db}) co-located with the scheduler, or a separate PostgreSQL server (optionally running in a Docker container).
+    
+    \item[Worker Nodes:] Each worker runs the \texttt{djs-wk} binary, which connects to the scheduler via gRPC. Workers also have the \texttt{djs-executor} and \texttt{djs-ebpf-monitor} binaries available locally for job execution.
+    
+    \item[Client Machines:] Run the \texttt{djs-cli} binary to submit jobs and query status. Multiple clients can connect to the scheduler simultaneously.
+    
+    \item[Admin Machine:] Runs the \texttt{admin} binary for token management. Typically co-located with the scheduler for administrative convenience.
+\end{description}
+
+\section{Algorithm Details}
+
+\subsection{First-Come-First-Serve (FCFS)}
+
+The FCFS algorithm is the simplest scheduling strategy. It selects the oldest unassigned job from the queue.
+
+\begin{lstlisting}[caption=FCFS Scheduling Algorithm,label=lst:fcfs]
+select_job(worker, jobs, db):
+    oldest_job = null
+    for each job in jobs:
+        if job.status == "not started":
+            if oldest_job is null or
+               job.created_at < oldest_job.created_at:
+                oldest_job = job
+    return oldest_job
+\end{lstlisting}
+
+Time complexity: O(n) where n is the number of unassigned jobs.
+
+\subsection{Shortest-Job-First (SJF)}
+
+The SJF algorithm uses historical runtime data to predict job duration and selects the job type with the shortest expected execution time.
+
+\begin{lstlisting}[caption=SJF Scheduling Algorithm,label=lst:sjf]
+select_job(worker, jobs, db):
+    avg_durations = db.get_avg_durations()  // map<job_type, avg_duration_ms>
+    best_job = null
+    best_duration = INFINITY
+    
+    for each job in jobs:
+        if job.status != "not started":
+            continue
+        if avg_durations contains job.job_type:
+            duration = avg_durations[job.job_type]
+            if duration < best_duration:
+                best_duration = duration
+                best_job = job
+    
+    // Fallback to FCFS if no historical data
+    if best_job is null:
+        return fcfs_select(worker, jobs, db)
+    
+    return best_job
+\end{lstlisting}
+
+The algorithm queries the \texttt{job\_runtime\_analytics} table to compute average durations per job type. For job types without historical records, it falls back to the FCFS strategy to ensure forward progress and bootstrap analytics data.
+
+\subsection{Adaptive Scheduling}
+
+The Adaptive algorithm considers both the worker's current resource utilization and the historical resource spikes of each job type to make informed scheduling decisions that avoid overloading workers.
+
+\begin{lstlisting}[caption=Adaptive Scheduling Algorithm,label=lst:adaptive]
+select_job(worker, jobs, db):
+    metrics = db.get_worker_latest_metrics(worker.id)
+    if metrics is null:
+        return fcfs_select(worker, jobs, db)
+    
+    spikes = db.get_avg_spikes()  // map<job_type, JobTypeSpikes>
+    
+    safe_known_job = null
+    oldest_unknown_job = null
+    
+    for each job in jobs:
+        if job.status != "not started":
+            continue
+        
+        if spikes contains job.job_type:
+            spike = spikes[job.job_type]
+            
+            // Predict resource usage after spike
+            pred_cpu = metrics.cpu_percent + spike.avg_cpu_spike
+            pred_mem = metrics.memory_used_mb +
+                       (spike.avg_memory_spike *
+                        metrics.memory_total_mb / 100.0) +
+                       200.0  // safety buffer
+            
+            if pred_cpu <= 100.0 AND
+               pred_mem <= metrics.memory_total_mb:
+                if safe_known_job is null or
+                   job.created_at < safe_known_job.created_at:
+                    safe_known_job = job
+        else:
+            // Unknown job type - needs bootstrapping
+            if oldest_unknown_job is null or
+               job.created_at < oldest_unknown_job.created_at:
+                oldest_unknown_job = job
+    
+    // Priority: safe known > oldest unknown
+    if safe_known_job is not null:
+        return safe_known_job
+    if oldest_unknown_job is not null:
+        return oldest_unknown_job
+    
+    return null  // No suitable job
+\end{lstlisting}
+
+The Adaptive algorithm uses the following prediction model:
+
+\begin{itemize}
+    \item \textbf{Predicted CPU:} \texttt{current\_cpu + avg\_cpu\_spike}. If the result exceeds 100\%, the job risks CPU starvation.
+    \item \textbf{Predicted Memory:} \texttt{current\_memory + (avg\_memory\_spike\_pct * total\_memory / 100) + 200MB}. The 200 MB safety buffer accounts for measurement inaccuracies and transient allocations.
+\end{itemize}
+
+Jobs with historical spike data that are predicted to fit within the worker's capacity are classified as \texttt{safe\_known}. Jobs of unknown types are classified as \texttt{unknown} and are accepted only when no safe known jobs are available, ensuring that the system gathers analytics data for new job types while prioritizing safe assignments.
+
+\section{Database Design}
+
+This section presents the database design for the scheduler backend. The database serves as the persistent store for all system data including job definitions, worker registrations, metrics, and analytics.
+
+\placeholderfig{er_diagram}{Entity-Relationship diagram showing the database schema}
+
+\subsection{Relational Schema}
+
+The database consists of the following tables:
+
+\begin{description}
+    \item[\texttt{clients}:] Stores registered client information. Fields: \texttt{id} (PK), \texttt{name}, \texttt{status}.
+    
+    \item[\texttt{workers}:] Stores registered worker node specifications. Fields: \texttt{id} (PK), \texttt{cpu\_cores}, \texttt{mem\_size}, \texttt{disk\_size}, \texttt{cpu\_freq}, \texttt{os}, \texttt{name}, \texttt{status}.
+    
+    \item[\texttt{jobs}:] Central table storing job definitions. Fields: \texttt{id} (PK), \texttt{job\_type}, \texttt{params}, \texttt{status}, \texttt{client\_id} (FK $\rightarrow$ clients), \texttt{created\_at}, \texttt{updated\_at}.
+    
+    \item[\texttt{job\_worker}:] Join table for the many-to-many relationship between jobs and workers. Fields: \texttt{job\_id} (FK, composite PK), \texttt{worker\_id} (FK, composite PK).
+    
+    \item[\texttt{job\_results}:] Stores job completion results. Fields: \texttt{job\_id} (PK, FK $\rightarrow$ jobs), \texttt{success}, \texttt{message}, \texttt{artifact\_url}, \texttt{metrics\_json}, \texttt{completed\_at}.
+    
+    \item[\texttt{auth\_tokens}:] Stores authentication tokens. Fields: \texttt{id} (PK), \texttt{token} (unique), \texttt{description}, \texttt{token\_type} (CHECK 'client' or 'worker'), \texttt{active}, \texttt{created\_at}.
+    
+    \item[\texttt{client\_token\_usage}:] Tracks which tokens are used by which clients. Fields: \texttt{id} (PK), \texttt{client\_id} (FK), \texttt{token\_id} (FK), \texttt{last\_used\_at}, UNIQUE(\texttt{client\_id}, \texttt{token\_id}).
+    
+    \item[\texttt{worker\_metrics}:] Latest metrics snapshot per worker (1:1 relationship). Fields: \texttt{worker\_id} (PK, FK), \texttt{cpu\_percent}, \texttt{memory\_percent}, \texttt{memory\_used\_mb}, \texttt{memory\_total\_mb}, \texttt{disk\_used\_mb}, \texttt{disk\_total\_mb}, \texttt{disk\_percent}, \texttt{rx\_bytes\_per\_sec}, \texttt{tx\_bytes\_per\_sec}, \texttt{load\_avg\_1m}, \texttt{active\_jobs}, \texttt{reported\_at}.
+    
+    \item[\texttt{job\_runtime\_snapshots}:] Per-job start and peak resource metrics (1:1 relationship). Fields: \texttt{job\_id} (PK, FK), \texttt{started\_at}, \texttt{start\_cpu\_percent}, \texttt{start\_memory\_percent}, \texttt{peak\_cpu\_percent}, \texttt{peak\_memory\_percent}.
+    
+    \item[\texttt{job\_runtime\_analytics}:] Historical runtime analytics records. Fields: \texttt{id} (PK), \texttt{job\_id} (FK), \texttt{job\_type}, \texttt{duration\_ms}, \texttt{cpu\_spike\_percent}, \texttt{memory\_spike\_percent}, \texttt{peak\_cpu\_percent}, \texttt{peak\_memory\_percent}, \texttt{recorded\_at}.
+    
+    \item[\texttt{job\_ebpf\_metrics}:] Fine-grained eBPF metrics data points. Fields: \texttt{id} (PK), \texttt{job\_id} (FK), \texttt{worker\_id} (FK), \texttt{recorded\_at}, \texttt{syscall\_read\_count}, \texttt{syscall\_write\_count}, \texttt{syscall\_openat\_count}, \texttt{io\_read\_bytes}, \texttt{io\_write\_bytes}, \texttt{net\_tx\_bytes}, \texttt{net\_rx\_bytes}, \texttt{cpu\_usage\_us}, \texttt{mem\_current\_bytes}. Indexed on (\texttt{job\_id}, \texttt{recorded\_at}).
+\end{description}
+
+\subsection{Relationship Summary}
+
+Table~\ref{tab:relationships} summarizes the relationships between entities.
+
+\begin{table}[htbp]
+\centering
+\caption{Entity Relationships}
+\label{tab:relationships}
+\begin{tabularx}{\textwidth}{lll}
+\toprule
+\textbf{Parent} & \textbf{Child} & \textbf{Relationship} \\
+\midrule
+clients & jobs & 1 to many \\
+jobs & job\_results & 1 to 1 \\
+jobs & job\_runtime\_snapshots & 1 to 1 \\
+jobs & job\_runtime\_analytics & 1 to many \\
+jobs & job\_ebpf\_metrics & 1 to many \\
+jobs, workers & job\_worker & Many to many (join) \\
+workers & worker\_metrics & 1 to 1 \\
+workers & job\_ebpf\_metrics & 1 to many \\
+clients, auth\_tokens & client\_token\_usage & Many to many (join) \\
+\bottomrule
+\end{tabularx}
+\end{table}
