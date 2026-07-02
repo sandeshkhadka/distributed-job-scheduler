@@ -21,7 +21,7 @@
 % HEADINGS: 16pt chapter, 14pt section, 12pt subsection
 % ------------------------------------------------------------
 \usepackage{titlesec}
-\titleformat{\chapter}[hang]{\normalfont\bfseries\fontsize{16}{19.2}\selectfont}{\thechapter}{1em}{}
+\titleformat{\chapter}[hang]{\normalfont\bfseries\fontsize{16}{19.2}\selectfont}{Chapter \thechapter:}{1em}{}
 \titleformat{\section}[hang]{\normalfont\bfseries\fontsize{14}{16.8}\selectfont}{\thesection}{1em}{}
 \titleformat{\subsection}[hang]{\normalfont\bfseries\fontsize{12}{14.4}\selectfont}{\thesubsection}{1em}{}
 \titleformat{\subsubsection}[hang]{\normalfont\bfseries\fontsize{12}{14.4}\selectfont}{\thesubsubsection}{1em}{}
@@ -150,10 +150,12 @@
 \clearpage
 
 % List of Figures
+\addcontentsline{toc}{chapter}{List of Figures}
 \listoffigures
 \clearpage
 
 % List of Tables
+\addcontentsline{toc}{chapter}{List of Tables}
 \listoftables
 \clearpage
 

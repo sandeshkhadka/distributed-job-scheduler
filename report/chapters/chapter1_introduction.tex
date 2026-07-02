@@ -11,29 +11,23 @@ All inter-component communication is handled through gRPC, a high-performance Re
 
 \section{Problem Statement}
 
-Manual stress testing presents several significant challenges in modern software development environments:
+Manual stress testing across distributed machines presents significant challenges:
 
 \begin{itemize}
-    \item \textbf{Manual coordination:} Setting up stress tests across multiple machines requires manual configuration, synchronization, and monitoring, which is tedious and prone to human error.
-    \item \textbf{Lack of centralized visibility:} Without a unified platform, test results and performance metrics are scattered across machines, making it difficult to aggregate and analyze data.
-    \item \textbf{Inefficient resource utilization:} Without intelligent scheduling, workers may sit idle while jobs pile up on other nodes, or may become overloaded with incompatible workloads.
-    \item \textbf{No workload isolation:} Running multiple stress tests on the same machine without isolation can lead to interference, producing unreliable results and potentially destabilizing the host system.
-    \item \textbf{Insufficient monitoring granularity:} Traditional process-level monitoring (e.g., \texttt{top}, \texttt{ps}) provides coarse-grained metrics that lack the detail needed to understand fine-grained resource contention behaviors.
+    \item \textbf{Lack of coordination and visibility:} Setting up stress tests manually requires tedious per-machine configuration with no centralized platform for job distribution, results aggregation, or progress monitoring. Resource utilization remains inefficient as workers sit idle or become overloaded without intelligent scheduling.
+    \item \textbf{Inadequate isolation and monitoring:} Running concurrent stress tests without proper isolation produces unreliable results due to workload interference. Traditional tools like \texttt{top} and \texttt{ps} provide only coarse-grained metrics, missing the fine-grained kernel-level data needed for accurate resource contention analysis.
 \end{itemize}
 
-The Distributed Job Scheduler directly addresses these problems by automating job distribution, providing centralized monitoring and results aggregation, implementing load-aware scheduling, enforcing cgroup-based resource isolation, and integrating eBPF monitoring for kernel-level metrics collection.
+The Distributed Job Scheduler addresses these problems through automated job distribution, load-aware scheduling, cgroup-based isolation, and eBPF-based kernel-level monitoring.
 
 \section{Objectives}
 
 The primary objectives of this project are:
 
 \begin{enumerate}
-    \item To design and implement a centralized job scheduler using gRPC that can accept, queue, and distribute stress-test jobs to registered worker nodes.
-    \item To develop worker nodes capable of executing jobs in isolated environments using Linux cgroups v2, with support for multiple stress-test types including CPU stress, memory stress, I/O stress, and mixed workloads.
-    \item To integrate eBPF-based monitoring that captures per-job kernel-level metrics including system call counts, I/O operations, network activity, CPU usage, and memory consumption in real time.
-    \item To implement multiple pluggable scheduling algorithms --- FCFS, SJF, and Adaptive --- that enable flexible and intelligent job-to-worker assignment.
-    \item To provide dual database support (SQLite and PostgreSQL) for persistent storage of job definitions, worker registrations, metrics, and analytics data.
-    \item To develop CLI and Admin tools for system interaction, including job submission, status querying, and authentication token management.
+    \item Design and implement a centralized gRPC-based scheduler with pluggable job selection strategies (FCFS, SJF, Adaptive) for intelligent stress-test distribution across registered worker nodes.
+    \item Develop worker nodes that execute jobs in isolated cgroup v2 environments and integrate eBPF-based monitoring to capture real-time kernel-level metrics (syscalls, I/O, network, CPU, memory).
+    \item Provide dual database backends (SQLite and PostgreSQL) along with CLI and Admin tools supporting token-based authentication for job submission, status tracking, and system management.
 \end{enumerate}
 
 \section{Scope and Limitations}

@@ -13,7 +13,7 @@ For you to fill in:
 
 # Changes as per teacher
 
-- [ ] summarize the problem statements and objectives to 1-3.
+- [ ] summarize the problem statements and objectives to 1-3 points.
 - [ ] change `2` -> `chapter 2`
 - [ ] create tests in the project, and add tests and results
 in the report 
