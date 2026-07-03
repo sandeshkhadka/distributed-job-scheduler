@@ -15,7 +15,7 @@ This chapter describes the implementation of the Distributed Job Scheduler syste
     
     \item[gRPC:] High-performance RPC framework used for all inter-component communication. gRPC was chosen over HTTP/REST for its strongly-typed contracts via Protocol Buffers, efficient binary serialization, and built-in support for bidirectional streaming.
     
-    \item[Protocol Buffers:] Used as both the Interface Definition Language (IDL) and serialization format. The \texttt{scheduler.proto} file defines the complete service contract with 11 RPC methods and 14 message types.
+    \item[Protocol Buffers:] Used as both the Interface Definition Language (IDL) and serialization format. The \texttt{scheduler.proto} file defines the complete service contract with 12 RPC methods and 26 message types.
 \end{description}
 
 \subsubsection{Database Systems}
@@ -66,11 +66,13 @@ The shared library provides foundational classes used by all other components:
 
 The scheduler is the central component of the system. Its implementation is structured as follows:
 
-\textbf{SchedulerServiceImpl:} Implements all 11 gRPC RPC methods defined in \texttt{scheduler.proto}. The implementation follows a consistent pattern: extract authentication token from metadata, validate via \texttt{check\_auth()}, perform the operation, and return the response. Key RPC implementations:
+\textbf{SchedulerServiceImpl:} Implements all 12 gRPC RPC methods defined in \texttt{scheduler.proto}. The implementation follows a consistent pattern: extract authentication token from metadata, validate via \texttt{check\_auth()}, perform the operation, and return the response. Key RPC implementations:
 
 \begin{itemize}
     \item \texttt{SubmitJob}: Deserializes the JSON params string, creates a job record with status \texttt{"not started"}, and returns the job ID.
     \item \texttt{GetJob}: The core scheduling RPC. Fetches all jobs with status \texttt{"not started"}, retrieves the worker's latest metrics, and passes both to the \texttt{JobSelector::select\_job()} method. The selected job is then associated with the worker via the \texttt{job\_worker} join table and its status is updated to \texttt{"ongoing"}.
+    \item \texttt{GetJobStatus}: Returns the current status of a job along with result details (success, message, artifact URL) if the job has completed. Authorized for both clients and workers.
+    \item \texttt{GetClientJobs}: Returns a list of all jobs submitted by a specific client, ordered by creation time. Used by the CLI's \texttt{jobs} command.
     \item \texttt{ReportJobResult}: Updates the job status to \texttt{"completed"} or \texttt{"failed"}, computes runtime analytics (duration, CPU/memory spikes), and stores both the result and analytics data.
     \item \texttt{ReportWorkerMetrics}: Uses \texttt{INSERT OR REPLACE} to maintain a single-row metrics record per worker, ensuring only the latest snapshot is retained.
 \end{itemize}
@@ -143,11 +145,10 @@ The eBPF monitor consists of two parts: the in-kernel BPF program and the usersp
 The CLI client provides a command-line interface for users to interact with the scheduler. It uses the \texttt{CliParser} class (based on the third-party \texttt{argparse.hpp} library) with subcommands:
 
 \begin{itemize}
-    \item \texttt{register --token <token>}: Registers the client with the scheduler.
+    \item \texttt{register --token <token>}: Registers the client with the scheduler. The returned client ID and authentication token are cached locally in \texttt{cli.db} via the \texttt{CliDatabase} class.
     \item \texttt{submit --type <type> --param <key=value> ...}: Submits a job with specified type and parameters.
-    \item \texttt{query --job-id <id>}: Queries the status of a specific job.
-    \item \texttt{cancel --job-id <id>}: Cancels a pending job.
-    \item \texttt{list}: Lists all jobs for the registered client.
+    \item \texttt{jobs [--refresh]}: Lists all jobs submitted by the registered client. Results are cached locally; passing \texttt{--refresh} bypasses the cache and fetches fresh data from the scheduler via the \texttt{GetClientJobs} RPC.
+    \item \texttt{result --id <job\_id> [--refresh]}: Retrieves the result and status of a completed job. Results are cached locally; \texttt{--refresh} forces a fresh fetch from the scheduler.
 \end{itemize}
 
 \subsubsection{Admin Module}
@@ -160,6 +161,20 @@ The admin tool manages authentication tokens through subcommands:
     \item \texttt{revoke-token --token-id <id>}: Revokes an active token.
     \item \texttt{usage --token-id <id>}: Shows token usage statistics.
 \end{itemize}
+
+\subsubsection{Dashboard Module}
+
+The dashboard is a web application built with Node.js and Express that provides a browser-based interface for monitoring the system. It connects directly to the PostgreSQL database (bypassing gRPC) and reads job, worker, and metrics data for display.
+
+The dashboard is organized into the following views:
+
+\begin{itemize}
+    \item \textbf{Overview page} (\texttt{/}): Displays summary statistics --- total workers, total jobs, succeeded jobs, and currently active jobs --- along with the 20 most recent job entries.
+    \item \textbf{Workers page} (\texttt{/workers}): Lists all registered workers with their latest metrics (CPU, memory, disk usage, load average). Clicking a worker opens a detail page (\texttt{/workers/:id}) showing active jobs and a historical table of completed jobs with runtime analytics.
+    \item \textbf{Jobs page} (\texttt{/jobs}): Lists all jobs with an optional \texttt{status} query filter. Clicking a job opens a detail page (\texttt{/jobs/:id}) showing job metadata, result information, and a full eBPF metrics timeseries table.
+\end{itemize}
+
+The dashboard also exposes REST API endpoints for programmatic access: \texttt{/api/workers/:id/metrics} returns a worker's metric history, \texttt{/api/workers/:id/jobs} returns a worker's job history, and \texttt{/api/jobs/:id/ebpf} returns the eBPF metrics timeseries for a specific job. The application serves on port 3000 by default and requires a running PostgreSQL database.
 
 \section{Testing}
 

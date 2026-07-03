@@ -84,6 +84,8 @@ The system is organized into the following components:
     
     \item[Admin Component:] Contains \texttt{AdminDatabase} (or \texttt{PgAdminDatabase}). Provides token management functionality.
     
+    \item[Dashboard Component:] A Node.js/Express web application (\texttt{dashboard/}) that connects directly to the PostgreSQL database. Provides a browser-based interface for viewing job and worker status, including overview statistics, worker detail pages with active job history, job detail pages with eBPF metrics, and REST API endpoints for metrics data.
+    
     \item[eBPF Monitor:] Standalone binary (\texttt{djs-ebpf-monitor}) that loads the BPF object, attaches tracepoints, and outputs JSON metrics to stdout.
     
     \item[djs-executor:] Minimal standalone binary that parses \texttt{--type} and \texttt{--param} arguments, creates the appropriate executor, and prints JSON results to stdout.
@@ -114,6 +116,8 @@ The system is deployed as follows:
     \item[Client Machines:] Run the \texttt{djs-cli} binary to submit jobs and query status. Multiple clients can connect to the scheduler simultaneously.
     
     \item[Admin Machine:] Runs the \texttt{admin} binary for token management. Typically co-located with the scheduler for administrative convenience.
+    
+    \item[Dashboard Server:] Runs the Node.js/Express dashboard application. Connects to the PostgreSQL database directly and serves a web UI on port 3000 for monitoring jobs, workers, and metrics.
 \end{description}
 
 \section{Algorithm Details}
@@ -133,7 +137,9 @@ select_job(worker, jobs, db):
     return oldest_job
 \end{lstlisting}
 
-Time complexity: O(n) where n is the number of unassigned jobs.
+FCFS serves as the baseline scheduling strategy in the project. It requires no historical data, no worker metrics, and no database queries beyond fetching the job queue --- it simply selects the oldest unassigned job. This makes it the simplest and most predictable algorithm to understand and debug.
+
+The main benefit of FCFS is its simplicity: it has no dependencies on worker reporting or historical analytics, so it works from the moment the scheduler starts. However, this simplicity is also its main limitation. FCFS has no knowledge of job characteristics (duration, resource requirements) or worker capacity. A CPU-intensive job can be assigned to an already overloaded worker, and short jobs can be stuck behind long ones, reducing overall throughput. The scheduler assigns jobs blindly without knowing whether the worker can handle them.
 
 \subsection{Shortest-Job-First (SJF)}
 
@@ -162,6 +168,8 @@ select_job(worker, jobs, db):
 \end{lstlisting}
 
 The algorithm queries the \texttt{job\_runtime\_analytics} table to compute average durations per job type. For job types without historical records, it falls back to the FCFS strategy to ensure forward progress and bootstrap analytics data.
+
+SJF improves on FCFS by using historical runtime data to prioritize shorter jobs. The key benefit is higher throughput --- by executing shorter jobs first, more jobs can complete per unit time compared to FCFS, which is especially beneficial when the queue contains a mix of short and long jobs. However, SJF still does not consider the worker's current resource utilization. A short but CPU-intensive job may still be assigned to an overloaded worker, potentially degrading performance for all jobs on that node. The duration-based heuristic is also an approximation at best, since actual runtime can vary significantly with system conditions.
 
 \subsection{Adaptive Scheduling}
 
@@ -220,6 +228,12 @@ The Adaptive algorithm uses the following prediction model:
 \end{itemize}
 
 Jobs with historical spike data that are predicted to fit within the worker's capacity are classified as \texttt{safe\_known}. Jobs of unknown types are classified as \texttt{unknown} and are accepted only when no safe known jobs are available, ensuring that the system gathers analytics data for new job types while prioritizing safe assignments.
+
+Compared to FCFS and SJF, the Adaptive algorithm offers several key advantages. First, it is capacity-aware --- it considers both the worker's current CPU and memory utilization and the historical resource spikes of each job type, rejecting assignments that would overload the worker. Second, its predictions improve over time as more jobs complete and spike data accumulates in the analytics tables. Third, it handles cold-start scenarios gracefully by accepting unknown job types for bootstrapping when no safe known jobs are available, ensuring the system can still make progress while gathering data.
+
+The main limitation is its dependence on worker metrics reporting --- if a worker has not yet sent its first metrics snapshot, the algorithm cannot make predictions and returns no assignment (the worker continues polling until metrics arrive). Additionally, the prediction model is a heuristic that may not capture complex interactions between multiple concurrent jobs sharing the same worker.
+
+Among the three strategies, Adaptive is the most suitable for production use. It combines FCFS fairness (oldest-first among safe jobs) with data-driven capacity planning, making informed decisions that protect worker stability while maximizing throughput. FCFS is best suited as a simple fallback or for debugging when no historical data or metrics are available. SJF provides a middle ground when runtime data exists but capacity awareness is not required. Adaptive is the recommended default because it alone accounts for the worker's actual state when making scheduling decisions.
 
 \section{Database Design}
 

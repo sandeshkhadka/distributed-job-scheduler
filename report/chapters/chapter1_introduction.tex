@@ -42,6 +42,7 @@ The scope of this project encompasses:
     \item \textbf{Monitoring:} eBPF monitoring tracks system call frequency (read, write, openat), I/O byte counts, network byte counts, CPU usage time, and memory usage at the cgroup level.
     \item \textbf{Scheduling:} Three scheduling algorithms are implemented and selectable at startup: FCFS, SJF, and Adaptive.
     \item \textbf{Authentication:} Bearer token-based authentication is enforced on all gRPC RPCs, with token generation, listing, and revocation supported by the Admin tool.
+    \item \textbf{CLI client:} Supports job submission, job listing with local caching, and job result retrieval, with a \texttt{--refresh} flag to bypass the cache and fetch fresh data from the scheduler.
     \item \textbf{Database:} Both SQLite and PostgreSQL backends are supported for the scheduler database.
 \end{itemize}
 
@@ -53,7 +54,7 @@ The project has the following limitations:
     \item \textbf{Linux-only:} The system relies on Linux-specific features (eBPF, cgroups v2, \texttt{/proc} filesystem) and cannot run on other operating systems.
     \item \textbf{No automatic worker discovery:} Workers must be manually configured with the scheduler's address; there is no service discovery mechanism.
     \item \textbf{No job dependencies:} The system does not support job dependency graphs or directed acyclic graph (DAG) scheduling.
-    \item \textbf{No web interface:} Interaction is limited to the CLI client; there is no graphical or web-based user interface.
+    \item \textbf{Web interface:} The experimental web dashboard currently connects only to the PostgreSQL backend and provides read-only views of jobs, workers, and metrics; it does not support job submission or other write operations.
     \item \textbf{Single scheduler:} The scheduler is a single point of contact; there is no scheduler replication or high-availability mode.
     \item \textbf{Workload scope:} The built-in executor types are currently limited to stress-test workloads; however, the executor architecture is extensible through the \texttt{JobExecutor} interface and supports arbitrary job types without modifying existing components.
 \end{itemize}

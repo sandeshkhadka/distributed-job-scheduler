@@ -14,7 +14,7 @@ Communication in distributed systems is typically handled through message passin
 
 gRPC is a high-performance, open-source universal RPC framework that enables client-server communication in distributed systems. It uses HTTP/2 as the transport protocol, providing features such as multiplexing, flow control, header compression, and bidirectional streaming. Protocol Buffers (Protobuf) serve as the Interface Definition Language (IDL) and serialization format, offering a compact binary encoding that is more efficient than text-based formats like JSON or XML.
 
-In this project, the service interface is defined in a single \texttt{.proto} file that specifies 11 RPC methods and 14 message types. These cover the complete job lifecycle: worker registration, client registration, job submission, job polling, job status confirmation, metrics reporting, result reporting, and timeseries data retrieval. The Protobuf compiler generates C++ code for both the server stubs (implemented by the Scheduler) and client stubs (used by the CLI and Worker components), ensuring type safety across all communication boundaries.
+In this project, the service interface is defined in a single \texttt{.proto} file that specifies 12 RPC methods and 26 message types. These cover the complete job lifecycle: worker registration, client registration, job submission, job listing, job polling, job status and result retrieval, metrics reporting, result reporting, and timeseries data retrieval. The Protobuf compiler generates C++ code for both the server stubs (implemented by the Scheduler) and client stubs (used by the CLI and Worker components), ensuring type safety across all communication boundaries.
 
 \subsection{eBPF (Extended Berkeley Packet Filter)}
 
