@@ -1,12 +1,12 @@
 \chapter*{Abstract}
 \addcontentsline{toc}{chapter}{Abstract}
 
-The Distributed Job Scheduler is a system designed to automate the orchestration, scheduling, and execution of stress-test workloads across a cluster of worker machines. It addresses the challenges of manual stress testing by providing a centralized gRPC-based scheduler that intelligently distributes jobs to registered worker nodes, monitors their execution in real-time using eBPF (Extended Berkeley Packet Filter), and collects detailed performance metrics.
+The Distributed Job Scheduler is a system designed to automate the orchestration, scheduling, and execution of computational jobs across remote machines. It addresses the challenges of manual job coordination across distributed machines by providing a centralized gRPC-based scheduler that intelligently distributes jobs to registered worker nodes, monitors their execution in real-time using eBPF (Extended Berkeley Packet Filter), and collects detailed performance metrics.
 
 The system comprises four primary components: a Scheduler server that manages job queues and assigns work using pluggable scheduling algorithms; Worker nodes that execute jobs in isolated cgroup v2 environments; a Command-Line Interface (CLI) client for job submission; and an Admin tool for authentication token management. The scheduler supports three job selection strategies --- First-Come-First-Serve (FCFS), Shortest-Job-First (SJF), and an Adaptive algorithm that considers current worker resource utilization and historical job behavior to make informed scheduling decisions.
 
 Each worker executes jobs in forked child processes isolated through cgroups v2, ensuring resource containment and preventing interference between workloads. An eBPF-based monitoring subsystem attaches to kernel tracepoints to collect fine-grained metrics per job, including system call counts, I/O throughput, network activity, CPU usage, and memory consumption. The system supports both SQLite and PostgreSQL database backends for persistent storage of job definitions, worker registrations, metrics, and analytics data.
 
-The project demonstrates the effective integration of modern Linux kernel technologies with distributed systems design to create a robust, extensible platform for stress-test automation. The pluggable scheduling architecture allows easy integration of custom job selection algorithms, while the eBPF monitoring provides unprecedented visibility into job behavior at the kernel level.
+The project demonstrates the effective integration of modern Linux kernel technologies with distributed systems design to create a robust, extensible platform for distributed job execution. The pluggable scheduling architecture allows easy integration of custom job selection algorithms, while the eBPF monitoring provides unprecedented visibility into job behavior at the kernel level.
 
 \clearpage

@@ -1,9 +1,9 @@
 \chapter{Introduction}
 
 \section{Introduction}
-Stress testing is a critical practice in software engineering that evaluates how a system behaves under extreme conditions such as high load, resource contention, and concurrent access. It helps identify performance bottlenecks, race conditions, memory leaks, and stability issues that may not surface under normal operation. However, conducting stress tests manually across multiple machines is error-prone, time-consuming, and lacks reproducibility. As distributed systems grow in complexity, the need for automated, coordinated stress-test execution becomes essential.
+Running computational jobs across multiple machines manually is a challenge --- it requires configuring each node individually, coordinating execution, and collecting results without a unified platform. As distributed systems grow in complexity, the need for automated job distribution and centralized monitoring becomes essential.
 
-The Distributed Job Scheduler (DJS) addresses this need by providing a centralized platform for orchestrating stress-test workloads across a cluster of worker nodes. The system follows a client-server architecture where a central Scheduler manages job queues, assigns work to registered Workers, and collects execution results. Workers execute jobs in isolated environments using Linux cgroups v2, ensuring that concurrent workloads do not interfere with each other. A custom eBPF-based monitoring subsystem provides real-time, kernel-level visibility into each job's resource consumption, including system call activity, I/O throughput, network usage, CPU utilization, and memory footprint.
+The Distributed Job Scheduler (DJS) addresses this need by providing a centralized platform for distributing and executing computational jobs across a cluster of remote worker nodes. The system follows a client-server architecture where a central Scheduler manages job queues, assigns work to registered Workers, and collects execution results. Workers execute jobs in isolated environments using Linux cgroups v2, ensuring that concurrent workloads do not interfere with each other. A custom eBPF-based monitoring subsystem provides real-time, kernel-level visibility into each job's resource consumption, including system call activity, I/O throughput, network usage, CPU utilization, and memory footprint.
 
 The scheduler employs a strategy pattern for job selection, supporting multiple algorithms: First-Come-First-Serve (FCFS), Shortest-Job-First (SJF), and an Adaptive algorithm that considers worker capacity and historical job behavior. This design allows the system to make intelligent scheduling decisions that optimize resource utilization across the cluster.
 
@@ -11,11 +11,11 @@ All inter-component communication is handled through gRPC, a high-performance Re
 
 \section{Problem Statement}
 
-Manual stress testing across distributed machines presents significant challenges:
+Executing jobs across distributed machines presents significant challenges:
 
 \begin{itemize}
-    \item \textbf{Lack of coordination and visibility:} Setting up stress tests manually requires tedious per-machine configuration with no centralized platform for job distribution, results aggregation, or progress monitoring. Resource utilization remains inefficient as workers sit idle or become overloaded without intelligent scheduling.
-    \item \textbf{Inadequate isolation and monitoring:} Running concurrent stress tests without proper isolation produces unreliable results due to workload interference. Traditional tools like \texttt{top} and \texttt{ps} provide only coarse-grained metrics, missing the fine-grained kernel-level data needed for accurate resource contention analysis.
+    \item \textbf{Lack of coordination and visibility:} Running jobs on multiple machines requires manual configuration and synchronization with no centralized platform for job distribution, results aggregation, or progress monitoring. Resource utilization remains inefficient as workers sit idle or become overloaded without intelligent scheduling.
+    \item \textbf{Inadequate isolation and monitoring:} Running concurrent jobs without proper isolation can lead to interference and unreliable results. Traditional tools like \texttt{top} and \texttt{ps} provide only coarse-grained metrics, missing the fine-grained kernel-level data needed for accurate resource analysis.
 \end{itemize}
 
 The Distributed Job Scheduler addresses these problems through automated job distribution, load-aware scheduling, cgroup-based isolation, and eBPF-based kernel-level monitoring.
@@ -25,7 +25,7 @@ The Distributed Job Scheduler addresses these problems through automated job dis
 The primary objectives of this project are:
 
 \begin{enumerate}
-    \item Design and implement a centralized gRPC-based scheduler with pluggable job selection strategies (FCFS, SJF, Adaptive) for intelligent stress-test distribution across registered worker nodes.
+    \item Design and implement a centralized gRPC-based scheduler with pluggable job selection strategies (FCFS, SJF, Adaptive) for intelligent job distribution across registered worker nodes.
     \item Develop worker nodes that execute jobs in isolated cgroup v2 environments and integrate eBPF-based monitoring to capture real-time kernel-level metrics (syscalls, I/O, network, CPU, memory).
     \item Provide dual database backends (SQLite and PostgreSQL) along with CLI and Admin tools supporting token-based authentication for job submission, status tracking, and system management.
 \end{enumerate}
@@ -37,7 +37,7 @@ The primary objectives of this project are:
 The scope of this project encompasses:
 
 \begin{itemize}
-    \item \textbf{Job types:} The system supports four stress-test workload types --- CPU stress (configurable thread count and duration), memory stress (configurable allocation size and duration), I/O stress (configurable file size, duration, and access mode), and mixed loads combining all three.
+    \item \textbf{Job types:} The system currently includes four built-in workload types --- CPU stress, memory stress, I/O stress, and mixed loads --- with an extensible executor architecture (via the \texttt{JobExecutor} interface) that allows adding new job types without modifying existing code.
     \item \textbf{Platform:} The system targets Linux-based worker nodes with kernel support for eBPF (kernel $\geq$ 4.18) and cgroups v2.
     \item \textbf{Monitoring:} eBPF monitoring tracks system call frequency (read, write, openat), I/O byte counts, network byte counts, CPU usage time, and memory usage at the cgroup level.
     \item \textbf{Scheduling:} Three scheduling algorithms are implemented and selectable at startup: FCFS, SJF, and Adaptive.
@@ -55,7 +55,7 @@ The project has the following limitations:
     \item \textbf{No job dependencies:} The system does not support job dependency graphs or directed acyclic graph (DAG) scheduling.
     \item \textbf{No web interface:} Interaction is limited to the CLI client; there is no graphical or web-based user interface.
     \item \textbf{Single scheduler:} The scheduler is a single point of contact; there is no scheduler replication or high-availability mode.
-    \item \textbf{Workload scope:} The system is designed specifically for stress-test workloads and is not a general-purpose job scheduler.
+    \item \textbf{Workload scope:} The built-in executor types are currently limited to stress-test workloads; however, the executor architecture is extensible through the \texttt{JobExecutor} interface and supports arbitrary job types without modifying existing components.
 \end{itemize}
 
 \section{Development Methodology}
@@ -63,7 +63,7 @@ The project has the following limitations:
 The project was developed using an iterative and incremental methodology. The development process was divided into the following phases:
 
 \begin{enumerate}
-    \item \textbf{Requirements Analysis:} Identification of functional and non-functional requirements through study of existing stress-testing practices and distributed scheduling systems.
+    \item \textbf{Requirements Analysis:} Identification of functional and non-functional requirements through study of existing distributed scheduling systems and job execution models.
     \item \textbf{Design:} Architectural design using object-oriented principles, including identification of classes, interfaces, and design patterns (Strategy, Factory, Observer).
     \item \textbf{Implementation:} Iterative development of components in the order: shared library $\rightarrow$ scheduler $\rightarrow$ worker $\rightarrow$ executors $\rightarrow$ eBPF monitor $\rightarrow$ CLI $\rightarrow$ admin tool.
     \item \textbf{Integration and Testing:} Integration of all components and manual end-to-end testing of the complete job lifecycle.

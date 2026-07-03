@@ -225,6 +225,12 @@ Jobs with historical spike data that are predicted to fit within the worker's ca
 
 This section presents the database design for the scheduler backend. The database serves as the persistent store for all system data including job definitions, worker registrations, metrics, and analytics.
 
+The project initially used SQLite as the sole database backend. SQLite requires no separate server, background processes, or configuration --- the entire database is a single file, making it ideal for rapid prototyping. Setting up PostgreSQL, in contrast, involves installing and configuring a dedicated database server with its own background processes, user management, and network setup.
+
+As the project grew and components such as the eBPF monitor, multiple executor instances, and concurrent worker processes were added, the database needed to handle simultaneous access from several independent programs. SQLite's file-level locking model allows only one writer at a time, making concurrent multi-process access impractical without contention. PostgreSQL was adopted to address this limitation --- its client-server architecture supports multiple simultaneous connections, enabling the scheduler, admin tool, monitor, and workers to access the database concurrently without conflicts. PostgreSQL also offers better scalability for the growing volume of eBPF metrics data.
+
+SQLite remains available as a lightweight backend for smaller deployments, development, and testing scenarios where simplicity outweighs the need for concurrent access. This dual-backend approach ensures backward compatibility with existing SQLite-based installations while providing a migration path to PostgreSQL for larger deployments.
+
 \begin{figure}[htbp]
     \centering
     \figimg{figures/er-diagram.png}

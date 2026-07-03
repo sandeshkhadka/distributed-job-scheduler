@@ -18,7 +18,7 @@ The functional requirements describe the specific behaviors and capabilities tha
 \end{figure}
 
 \begin{description}
-    \item[Actor 1: Client (User)] A user who submits stress-test jobs to the system.
+    \item[Actor 1: Client (User)] A user who submits jobs to the system.
     \item[Actor 2: Worker Node] A machine that receives and executes scheduled jobs.
     \item[Actor 3: Administrator] A user responsible for managing authentication tokens.
     \item[Actor 4: Scheduler] The central system component (also an actor for internal interactions).
@@ -135,7 +135,7 @@ The principal classes identified during analysis are:
     
     \item[JobOrchestrator:] Manages the lifecycle of a job on the worker side, including cgroup creation, process forking, eBPF monitor management, and result collection.
     
-    \item[JobExecutor (abstract):] Defines the interface for different stress-test executor types. Concrete implementations include StressCpuExecutor, StressMemExecutor, StressIOExecutor, and MixedLoadExecutor.
+    \item[JobExecutor (abstract):] Defines the interface for different executor types. Concrete implementations include StressCpuExecutor, StressMemExecutor, StressIOExecutor, and MixedLoadExecutor, with additional types addable through the same interface.
     
     \item[MetricsCollector:] Collects system-level metrics (CPU, memory, disk, network) by reading \texttt{/proc} filesystem entries.
     
@@ -228,7 +228,7 @@ The workflow proceeds as follows:
     \item The Client submits a job, which enters the scheduler's queue.
     \item The Worker polls for a job; the Scheduler applies the selection algorithm.
     \item If a suitable job is found, the Worker prepares the execution environment (cgroup creation, process fork).
-    \item The Executor runs the stress test; the eBPF monitor collects kernel-level metrics.
+    \item The Executor runs the job; the eBPF monitor collects kernel-level metrics.
     \item After execution, the Worker collects results and reports them to the Scheduler.
     \item The Scheduler updates the job status and stores analytics for future scheduling decisions.
 \end{enumerate}
