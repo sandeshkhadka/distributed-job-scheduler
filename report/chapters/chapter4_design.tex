@@ -2,7 +2,7 @@
 
 \section{Design}
 
-This chapter presents the detailed design of the Distributed Job Scheduler system. Following the object-oriented approach established in the analysis chapter, it covers the refined class design, component architecture, deployment architecture, algorithm details, and database design.
+This chapter presents the detailed design of the Distributed Job Scheduler system. Following the object-oriented approach established in the analysis chapter, it covers the refined class design, component architecture, deployment architecture, algorithm details, analysis of scheduling algorithms, and database design.
 
 \subsection{Refined Class Diagrams}
 
@@ -137,10 +137,6 @@ select_job(worker, jobs, db):
     return oldest_job
 \end{lstlisting}
 
-FCFS serves as the baseline scheduling strategy in the project. It requires no historical data, no worker metrics, and no database queries beyond fetching the job queue --- it simply selects the oldest unassigned job. This makes it the simplest and most predictable algorithm to understand and debug.
-
-The main benefit of FCFS is its simplicity: it has no dependencies on worker reporting or historical analytics, so it works from the moment the scheduler starts. However, this simplicity is also its main limitation. FCFS has no knowledge of job characteristics (duration, resource requirements) or worker capacity. A CPU-intensive job can be assigned to an already overloaded worker, and short jobs can be stuck behind long ones, reducing overall throughput. The scheduler assigns jobs blindly without knowing whether the worker can handle them.
-
 \subsection{Shortest-Job-First (SJF)}
 
 The SJF algorithm uses historical runtime data to predict job duration and selects the job type with the shortest expected execution time.
@@ -168,8 +164,6 @@ select_job(worker, jobs, db):
 \end{lstlisting}
 
 The algorithm queries the \texttt{job\_runtime\_analytics} table to compute average durations per job type. For job types without historical records, it falls back to the FCFS strategy to ensure forward progress and bootstrap analytics data.
-
-SJF improves on FCFS by using historical runtime data to prioritize shorter jobs. The key benefit is higher throughput --- by executing shorter jobs first, more jobs can complete per unit time compared to FCFS, which is especially beneficial when the queue contains a mix of short and long jobs. However, SJF still does not consider the worker's current resource utilization. A short but CPU-intensive job may still be assigned to an overloaded worker, potentially degrading performance for all jobs on that node. The duration-based heuristic is also an approximation at best, since actual runtime can vary significantly with system conditions.
 
 \subsection{Adaptive Scheduling}
 
@@ -229,11 +223,27 @@ The Adaptive algorithm uses the following prediction model:
 
 Jobs with historical spike data that are predicted to fit within the worker's capacity are classified as \texttt{safe\_known}. Jobs of unknown types are classified as \texttt{unknown} and are accepted only when no safe known jobs are available, ensuring that the system gathers analytics data for new job types while prioritizing safe assignments.
 
+\section{Analysis of Scheduling Algorithms}
+
+This section analyzes the three scheduling strategies in terms of their trade-offs, limitations, and suitability for different deployment scenarios.
+
+\subsection{First-Come-First-Serve (FCFS)}
+
+FCFS serves as the baseline scheduling strategy in the project. It requires no historical data, no worker metrics, and no database queries beyond fetching the job queue --- it simply selects the oldest unassigned job. This makes it the simplest and most predictable algorithm to understand and debug.
+
+The main benefit of FCFS is its simplicity: it has no dependencies on worker reporting or historical analytics, so it works from the moment the scheduler starts. However, this simplicity is also its main limitation. FCFS has no knowledge of job characteristics (duration, resource requirements) or worker capacity. A CPU-intensive job can be assigned to an already overloaded worker, and short jobs can be stuck behind long ones, reducing overall throughput. The scheduler assigns jobs blindly without knowing whether the worker can handle them.
+
+\subsection{Shortest-Job-First (SJF)}
+
+SJF improves on FCFS by using historical runtime data to prioritize shorter jobs. The key benefit is higher throughput --- by executing shorter jobs first, more jobs can complete per unit time compared to FCFS, which is especially beneficial when the queue contains a mix of short and long jobs. However, SJF still does not consider the worker's current resource utilization. A short but CPU-intensive job may still be assigned to an overloaded worker, potentially degrading performance for all jobs on that node. The duration-based heuristic is also an approximation at best, since actual runtime can vary significantly with system conditions.
+
+\subsection{Adaptive Scheduling}
+
 Compared to FCFS and SJF, the Adaptive algorithm offers several key advantages. First, it is capacity-aware --- it considers both the worker's current CPU and memory utilization and the historical resource spikes of each job type, rejecting assignments that would overload the worker. Second, its predictions improve over time as more jobs complete and spike data accumulates in the analytics tables. Third, it handles cold-start scenarios gracefully by accepting unknown job types for bootstrapping when no safe known jobs are available, ensuring the system can still make progress while gathering data.
 
 The main limitation is its dependence on worker metrics reporting --- if a worker has not yet sent its first metrics snapshot, the algorithm cannot make predictions and returns no assignment (the worker continues polling until metrics arrive). Additionally, the prediction model is a heuristic that may not capture complex interactions between multiple concurrent jobs sharing the same worker.
 
-Among the three strategies, Adaptive is the most suitable for production use. It combines FCFS fairness (oldest-first among safe jobs) with data-driven capacity planning, making informed decisions that protect worker stability while maximizing throughput. FCFS is best suited as a simple fallback or for debugging when no historical data or metrics are available. SJF provides a middle ground when runtime data exists but capacity awareness is not required. Adaptive is the recommended default because it alone accounts for the worker's actual state when making scheduling decisions.
+Among the three strategies, Adaptive is the most suitable for production use. It combines FCFS fairness (oldest-first among safe jobs) with data-driven capacity planning, making informed decisions that protect worker stability while maximizing throughput. This behavior is confirmed empirically in the testing section (test case \texttt{AdaptivePreventsOverloadWhileFCFSAndSJFDoNot} in Table~\ref{tab:unit_tests}): given a worker at 80\% CPU with a short CPU-heavy job and a longer I/O job, both FCFS and SJF select the CPU job and would overload the worker to 110\%, while Adaptive correctly rejects it and selects the safe I/O job. FCFS is best suited as a simple fallback or for debugging when no historical data or metrics are available. SJF provides a middle ground when runtime data exists but capacity awareness is not required. Adaptive is the recommended default because it alone accounts for the worker's actual state when making scheduling decisions.
 
 \section{Database Design}
 

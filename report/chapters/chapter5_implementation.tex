@@ -197,7 +197,7 @@ cmake --build build --target run_tests
 
 \subsection{Test Architecture}
 
-The test suite is organized into six test suites (Table~\ref{tab:test_suites}) with 22 individual test cases. The scheduling strategy tests use a \texttt{MockDatabase} class that implements the \texttt{ISchedulerDatabase} interface, allowing each selector to be tested in complete isolation without a real database.
+The test suite is organized into seven test suites (Table~\ref{tab:test_suites}) with 23 individual test cases. The scheduling strategy tests use a \texttt{MockDatabase} class that implements the \texttt{ISchedulerDatabase} interface, allowing each selector to be tested in complete isolation without a real database.
 
 \begin{table}[htbp]
 \centering
@@ -213,6 +213,7 @@ SJFSelectorTest & test\_selectors.cpp & 4 tests for SJF scheduling strategy \\
 AdaptiveSelectorTest & test\_selectors.cpp & 5 tests for Adaptive scheduling strategy \\
 DatabaseTest & test\_database.cpp & 4 tests for SQLite database operations \\
 EbpfMetricStoreTest & test\_metric\_store.cpp & 5 tests for eBPF metric accumulator \\
+SelectorComparisonTest & test\_selectors.cpp & 1 test comparing all three selectors \\
 MetricsCollectorTest & test\_metrics.cpp & 1 test for system metrics collection \\
 \bottomrule
 \end{tabular}%
@@ -246,6 +247,8 @@ Adaptive & PicksSafeKnownJob & 50\% CPU, 30\% mem, known spike fits & Returns th
 Adaptive & PicksUnknownWhenNoSafe & No spike history for any job type & Returns oldest unknown (bootstrap) \\
 Adaptive & RejectsCPUOverload & 95\% CPU + 10\% spike exceeds 100\% & Returns default Job (rejected) \\
 Adaptive & PicksOldestSafe & 2 safe jobs, different timestamps & Returns older safe job \\
+\midrule
+Comparison & AdaptivePreventsOverloadWhileFCFSAndSJFDoNot & Worker at 80\% CPU; stress\_cpu (spike 30\%) vs stress\_io (spike 5\%) & FCFS/SJF pick stress\_cpu (overloads); Adaptive picks stress\_io (safe) \\
 \midrule
 Database & InsertAndRetrieveJob & Insert stress\_cpu job & Job retrievable with correct type/status \\
 Database & QueryByStatus & Insert not\_started and completed jobs & Both statuses returned correctly \\
@@ -290,7 +293,7 @@ eBPF metrics collection & Submit CPU job, query metrics & Non-zero syscall count
 
 \subsection{Result Analysis}
 
-The automated test suite was built and executed on a Fedora 43 system with GCC 15.2.1 and Google Test 1.15.2. All 22 tests passed successfully with zero failures.
+The automated test suite was built and executed on a Fedora 43 system with GCC 15.2.1 and Google Test 1.15.2. All 23 tests passed successfully with zero failures.
 
 \subsubsection{Test Execution Output}
 
@@ -301,7 +304,7 @@ $ cmake -B build -DBUILD_TESTS=ON
 $ cmake --build build --target run_tests
 $ ./build/tests/run_tests
 
-[==========] Running 22 tests from 6 test suites.
+[==========] Running 23 tests from 7 test suites.
 [----------] 3 tests from FCFSSelectorTest
 [ RUN      ] FCFSSelectorTest.ReturnsEmptyJobWhenNoJobs
 [       OK ] (0 ms)
@@ -332,6 +335,10 @@ $ ./build/tests/run_tests
 [ RUN      ] AdaptiveSelectorTest.PicksOldestSafeAmongMultiple
 [       OK ] (0 ms)
 
+[----------] 1 test from SelectorComparisonTest
+[ RUN      ] SelectorComparisonTest.AdaptivePreventsOverloadWhileFCFSandSJFDoNot
+[       OK ] (0 ms)
+
 [----------] 4 tests from DatabaseTest
 [ RUN      ] DatabaseTest.InsertAndRetrieveJob
 [       OK ] (0 ms)
@@ -358,16 +365,16 @@ $ ./build/tests/run_tests
 [ RUN      ] MetricsCollectorTest.CollectReturnsNonDefaultValues
 [       OK ] (0 ms)
 
-[==========] 22 tests from 6 test suites ran. (2 ms total)
-[  PASSED  ] 22 tests.
+[==========] 23 tests from 7 test suites ran. (1 ms total)
+[  PASSED  ] 23 tests.
 \end{lstlisting}
 
 \subsubsection{Analysis}
 
-All 22 tests completed successfully in approximately 2 milliseconds. The results demonstrate:
+All 23 tests completed successfully in approximately 1 millisecond. The results demonstrate:
 
 \begin{description}
-    \item[Scheduling Strategy Correctness:] All 12 selector tests pass, confirming that FCFS correctly orders by timestamp, SJF correctly selects by historical duration with proper FCFS fallback, and Adaptive correctly predicts resource impact, handles unknown types for bootstrapping, and rejects overload scenarios.
+    \item[Scheduling Strategy Correctness:] All 13 selector tests pass, confirming that FCFS correctly orders by timestamp, SJF correctly selects by historical duration with proper FCFS fallback, and Adaptive correctly predicts resource impact, handles unknown types for bootstrapping, and rejects overload scenarios. The cross-selector comparison test further validates that only Adaptive prevents overload while FCFS and SJF do not.
     
     \item[Database Layer Integrity:] All 4 database tests pass, confirming that SQLite insert, query, and token validation operations function correctly with an in-memory database.
     

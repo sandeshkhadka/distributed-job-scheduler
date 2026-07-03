@@ -290,3 +290,62 @@ TEST(AdaptiveSelectorTest, PicksOldestSafeAmongMultiple) {
     EXPECT_EQ(result.id, 2);
     EXPECT_EQ(result.job_type, "stress_mem");
 }
+
+// ============================================================
+// Cross-Selector Comparison Tests
+// ============================================================
+
+TEST(SelectorComparisonTest, AdaptivePreventsOverloadWhileFCFSandSJFDoNot) {
+    Worker worker;
+    worker.id = 1;
+
+    // Worker at 80% CPU, 30% memory (2048 / 8192 MB)
+    MockDatabase db;
+    db.metrics = WorkerMetricsBrief{80.0, 30.0, 2048.0, 8192.0};
+
+    // Job 1: stress_cpu — older, shorter runtime, high CPU spike (30%)
+    // Job 2: stress_io  — newer, longer runtime, low CPU spike (5%)
+    //
+    // stress_cpu on this worker:  80 + 30 = 110% CPU → overload
+    // stress_io  on this worker:  80 + 5  =  85% CPU → safe
+
+    Job cpu;
+    cpu.id = 1;
+    cpu.job_type = "stress_cpu";
+    cpu.status = "not started";
+    cpu.created_at = "2025-07-01 11:00:00";
+
+    Job io;
+    io.id = 2;
+    io.job_type = "stress_io";
+    io.status = "not started";
+    io.created_at = "2025-07-01 13:00:00";
+
+    std::vector<Job> jobs = {cpu, io};
+
+    db.durations["stress_cpu"] = 10000.0;
+    db.durations["stress_io"] = 60000.0;
+    db.spikes["stress_cpu"] = JobTypeSpikes{30.0, 5.0, 10};
+    db.spikes["stress_io"] = JobTypeSpikes{5.0, 10.0, 10};
+
+    // FCFS: picks oldest (stress_cpu) — would overload the worker
+    {
+        FCFSSelector selector;
+        Job result = selector.select_job(worker, jobs, db);
+        EXPECT_EQ(result.id, 1) << "FCFS picks oldest job regardless of load";
+    }
+
+    // SJF: picks shortest (stress_cpu) — would overload the worker
+    {
+        SJFSelector selector;
+        Job result = selector.select_job(worker, jobs, db);
+        EXPECT_EQ(result.id, 1) << "SJF picks shortest job regardless of load";
+    }
+
+    // Adaptive: rejects overload, picks safe (stress_io)
+    {
+        AdaptiveSelector selector;
+        Job result = selector.select_job(worker, jobs, db);
+        EXPECT_EQ(result.id, 2) << "Adaptive rejects overload and picks the safe job";
+    }
+}
