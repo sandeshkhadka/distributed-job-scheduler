@@ -10,6 +10,7 @@
 *.blg
 *.bcf
 *.run.xml
+*.bak*
 
 # Generated PDF (reproducible from source)
 *.pdf
