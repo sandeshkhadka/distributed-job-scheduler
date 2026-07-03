@@ -1,13 +1,13 @@
 \chapter{Introduction}
 
 \section{Introduction}
-Running computational jobs across multiple machines manually is a challenge --- it requires configuring each node individually, coordinating execution, and collecting results without a unified platform. As distributed systems grow in complexity, the need for automated job distribution and centralized monitoring becomes essential.
+Running computational jobs across multiple machines manually is a challenge; it requires configuring each node individually, coordinating execution, and collecting results without a unified platform. As distributed systems grow in complexity, the need for automated job distribution and centralized monitoring becomes essential.
 
 The Distributed Job Scheduler (DJS) addresses this need by providing a centralized platform for distributing and executing computational jobs across a cluster of remote worker nodes. The system follows a client-server architecture where a central Scheduler manages job queues, assigns work to registered Workers, and collects execution results. Workers execute jobs in isolated environments using Linux cgroups v2, ensuring that concurrent workloads do not interfere with each other. A custom eBPF-based monitoring subsystem provides real-time, kernel-level visibility into each job's resource consumption, including system call activity, I/O throughput, network usage, CPU utilization, and memory footprint.
 
 The scheduler employs a strategy pattern for job selection, supporting multiple algorithms: First-Come-First-Serve (FCFS), Shortest-Job-First (SJF), and an Adaptive algorithm that considers worker capacity and historical job behavior. This design allows the system to make intelligent scheduling decisions that optimize resource utilization across the cluster.
 
-All inter-component communication is handled through gRPC, a high-performance Remote Procedure Call (RPC) framework, with Protocol Buffers for message serialization. The system supports dual database backends --- SQLite for lightweight, embedded deployments and PostgreSQL for scalable, production-grade installations.
+All inter-component communication is handled through gRPC, a high-performance Remote Procedure Call (RPC) framework, with Protocol Buffers for message serialization. The system supports dual database backends: SQLite for lightweight, embedded deployments and PostgreSQL for scalable, production-grade installations.
 
 \section{Problem Statement}
 
@@ -37,7 +37,7 @@ The primary objectives of this project are:
 The scope of this project encompasses:
 
 \begin{itemize}
-    \item \textbf{Job types:} The system currently includes four built-in workload types --- CPU stress, memory stress, I/O stress, and mixed loads --- with an extensible executor architecture (via the \texttt{JobExecutor} interface) that allows adding new job types without modifying existing code.
+    \item \textbf{Job types:} The system currently includes four built-in workload types: CPU stress, memory stress, I/O stress, and mixed loads, with an extensible executor architecture (via the \texttt{JobExecutor} interface) that allows adding new job types without modifying existing code.
     \item \textbf{Platform:} The system targets Linux-based worker nodes with kernel support for eBPF (kernel $\geq$ 4.18) and cgroups v2.
     \item \textbf{Monitoring:} eBPF monitoring tracks system call frequency (read, write, openat), I/O byte counts, network byte counts, CPU usage time, and memory usage at the cgroup level.
     \item \textbf{Scheduling:} Three scheduling algorithms are implemented and selectable at startup: FCFS, SJF, and Adaptive.

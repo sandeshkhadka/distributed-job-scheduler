@@ -81,6 +81,13 @@ The scheduler is the central component of the system. Its implementation is stru
 
 \textbf{Database selection:} The \texttt{SchedulerDb} typedef resolves to either \texttt{SchedulerDatabase} (SQLite) or \texttt{PgSchedulerDatabase} (PostgreSQL) based on the \texttt{USE\_PG} compile-time flag, enabling backend selection without code changes.
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_scheduler_startup.jpg}
+    \caption{Scheduler startup output showing gRPC server listening on port 50051}
+    \label{fig:scheduler-startup}
+\end{figure}
+
 \subsubsection{Worker Module}
 
 The worker module is the most complex component, managing job polling, execution, monitoring, and metrics reporting.
@@ -108,6 +115,13 @@ The worker module is the most complex component, managing job polling, execution
 \end{enumerate}
 
 \textbf{Crash recovery:} On startup, \texttt{recover\_pending\_jobs()} checks for any jobs in non-terminal states (\texttt{received}, \texttt{scheduled}, \texttt{started}, \texttt{ongoing}) and automatically reports them as failed to the scheduler.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs-wk_startup.jpg}
+    \caption{Worker startup showing registration and job polling loop}
+    \label{fig:worker-startup}
+\end{figure}
 
 \subsubsection{Executor Implementations}
 
@@ -151,6 +165,27 @@ The CLI client provides a command-line interface for users to interact with the 
     \item \texttt{result --id <job\_id> [--refresh]}: Retrieves the result and status of a completed job. Results are cached locally; \texttt{--refresh} forces a fresh fetch from the scheduler.
 \end{itemize}
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs-cli_job_submission.jpg}
+    \caption{CLI job submission showing job ID returned from the scheduler}
+    \label{fig:cli-submit}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_cli_jobs_list.jpg}
+    \caption{CLI jobs list showing submitted job IDs with status, type, and timestamps}
+    \label{fig:cli-jobs}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs-cli_job_result.jpg}
+    \caption{CLI result retrieval showing job status, duration, and output details}
+    \label{fig:cli-result}
+\end{figure}
+
 \subsubsection{Admin Module}
 
 The admin tool manages authentication tokens through subcommands:
@@ -169,12 +204,26 @@ The dashboard is a web application built with Node.js and Express that provides 
 The dashboard is organized into the following views:
 
 \begin{itemize}
-    \item \textbf{Overview page} (\texttt{/}): Displays summary statistics --- total workers, total jobs, succeeded jobs, and currently active jobs --- along with the 20 most recent job entries.
+    \item \textbf{Overview page} (\texttt{/}): Displays summary statistics: total workers, total jobs, succeeded jobs, and currently active jobs, along with the 20 most recent job entries.
     \item \textbf{Workers page} (\texttt{/workers}): Lists all registered workers with their latest metrics (CPU, memory, disk usage, load average). Clicking a worker opens a detail page (\texttt{/workers/:id}) showing active jobs and a historical table of completed jobs with runtime analytics.
     \item \textbf{Jobs page} (\texttt{/jobs}): Lists all jobs with an optional \texttt{status} query filter. Clicking a job opens a detail page (\texttt{/jobs/:id}) showing job metadata, result information, and a full eBPF metrics timeseries table.
 \end{itemize}
 
 The dashboard also exposes REST API endpoints for programmatic access: \texttt{/api/workers/:id/metrics} returns a worker's metric history, \texttt{/api/workers/:id/jobs} returns a worker's job history, and \texttt{/api/jobs/:id/ebpf} returns the eBPF metrics timeseries for a specific job. The application serves on port 3000 by default and requires a running PostgreSQL database.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_dashboard_jobs_list.jpg}
+    \caption{Web dashboard jobs list showing all jobs with status, type, worker assignment, and timestamps}
+    \label{fig:dashboard-jobs}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_dashboard_job_metric_tracking.jpg}
+    \caption{Dashboard job detail view showing eBPF metrics timeseries for a completed job}
+    \label{fig:dashboard-metrics}
+\end{figure}
 
 \section{Testing}
 
@@ -294,6 +343,13 @@ eBPF metrics collection & Submit CPU job, query metrics & Non-zero syscall count
 \subsection{Result Analysis}
 
 The automated test suite was built and executed on a Fedora 43 system with GCC 15.2.1 and Google Test 1.15.2. All 23 tests passed successfully with zero failures.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_overall.jpg}
+    \caption{Complete system overview showing scheduler, worker, and dashboard running concurrently}
+    \label{fig:overall}
+\end{figure}
 
 \subsubsection{Test Execution Output}
 

@@ -229,19 +229,19 @@ This section analyzes the three scheduling strategies in terms of their trade-of
 
 \subsection{First-Come-First-Serve (FCFS)}
 
-FCFS serves as the baseline scheduling strategy in the project. It requires no historical data, no worker metrics, and no database queries beyond fetching the job queue --- it simply selects the oldest unassigned job. This makes it the simplest and most predictable algorithm to understand and debug.
+FCFS serves as the baseline scheduling strategy in the project. It requires no historical data, no worker metrics, and no database queries beyond fetching the job queue: it simply selects the oldest unassigned job. This makes it the simplest and most predictable algorithm to understand and debug.
 
 The main benefit of FCFS is its simplicity: it has no dependencies on worker reporting or historical analytics, so it works from the moment the scheduler starts. However, this simplicity is also its main limitation. FCFS has no knowledge of job characteristics (duration, resource requirements) or worker capacity. A CPU-intensive job can be assigned to an already overloaded worker, and short jobs can be stuck behind long ones, reducing overall throughput. The scheduler assigns jobs blindly without knowing whether the worker can handle them.
 
 \subsection{Shortest-Job-First (SJF)}
 
-SJF improves on FCFS by using historical runtime data to prioritize shorter jobs. The key benefit is higher throughput --- by executing shorter jobs first, more jobs can complete per unit time compared to FCFS, which is especially beneficial when the queue contains a mix of short and long jobs. However, SJF still does not consider the worker's current resource utilization. A short but CPU-intensive job may still be assigned to an overloaded worker, potentially degrading performance for all jobs on that node. The duration-based heuristic is also an approximation at best, since actual runtime can vary significantly with system conditions.
+SJF improves on FCFS by using historical runtime data to prioritize shorter jobs. The key benefit is higher throughput: by executing shorter jobs first, more jobs can complete per unit time compared to FCFS, which is especially beneficial when the queue contains a mix of short and long jobs. However, SJF still does not consider the worker's current resource utilization. A short but CPU-intensive job may still be assigned to an overloaded worker, potentially degrading performance for all jobs on that node. The duration-based heuristic is also an approximation at best, since actual runtime can vary significantly with system conditions.
 
 \subsection{Adaptive Scheduling}
 
-Compared to FCFS and SJF, the Adaptive algorithm offers several key advantages. First, it is capacity-aware --- it considers both the worker's current CPU and memory utilization and the historical resource spikes of each job type, rejecting assignments that would overload the worker. Second, its predictions improve over time as more jobs complete and spike data accumulates in the analytics tables. Third, it handles cold-start scenarios gracefully by accepting unknown job types for bootstrapping when no safe known jobs are available, ensuring the system can still make progress while gathering data.
+Compared to FCFS and SJF, the Adaptive algorithm offers several key advantages. First, it is capacity-aware: it considers both the worker's current CPU and memory utilization and the historical resource spikes of each job type, rejecting assignments that would overload the worker. Second, its predictions improve over time as more jobs complete and spike data accumulates in the analytics tables. Third, it handles cold-start scenarios gracefully by accepting unknown job types for bootstrapping when no safe known jobs are available, ensuring the system can still make progress while gathering data.
 
-The main limitation is its dependence on worker metrics reporting --- if a worker has not yet sent its first metrics snapshot, the algorithm cannot make predictions and returns no assignment (the worker continues polling until metrics arrive). Additionally, the prediction model is a heuristic that may not capture complex interactions between multiple concurrent jobs sharing the same worker.
+The main limitation is its dependence on worker metrics reporting: if a worker has not yet sent its first metrics snapshot, the algorithm cannot make predictions and returns no assignment (the worker continues polling until metrics arrive). Additionally, the prediction model is a heuristic that may not capture complex interactions between multiple concurrent jobs sharing the same worker.
 
 Among the three strategies, Adaptive is the most suitable for production use. It combines FCFS fairness (oldest-first among safe jobs) with data-driven capacity planning, making informed decisions that protect worker stability while maximizing throughput. This behavior is confirmed empirically in the testing section (test case \texttt{AdaptivePreventsOverloadWhileFCFSAndSJFDoNot} in Table~\ref{tab:unit_tests}): given a worker at 80\% CPU with a short CPU-heavy job and a longer I/O job, both FCFS and SJF select the CPU job and would overload the worker to 110\%, while Adaptive correctly rejects it and selects the safe I/O job. FCFS is best suited as a simple fallback or for debugging when no historical data or metrics are available. SJF provides a middle ground when runtime data exists but capacity awareness is not required. Adaptive is the recommended default because it alone accounts for the worker's actual state when making scheduling decisions.
 
@@ -249,9 +249,9 @@ Among the three strategies, Adaptive is the most suitable for production use. It
 
 This section presents the database design for the scheduler backend. The database serves as the persistent store for all system data including job definitions, worker registrations, metrics, and analytics.
 
-The project initially used SQLite as the sole database backend. SQLite requires no separate server, background processes, or configuration --- the entire database is a single file, making it ideal for rapid prototyping. Setting up PostgreSQL, in contrast, involves installing and configuring a dedicated database server with its own background processes, user management, and network setup.
+The project initially used SQLite as the sole database backend. SQLite requires no separate server, background processes, or configuration: the entire database is a single file, making it ideal for rapid prototyping. Setting up PostgreSQL, in contrast, involves installing and configuring a dedicated database server with its own background processes, user management, and network setup.
 
-As the project grew and components such as the eBPF monitor, multiple executor instances, and concurrent worker processes were added, the database needed to handle simultaneous access from several independent programs. SQLite's file-level locking model allows only one writer at a time, making concurrent multi-process access impractical without contention. PostgreSQL was adopted to address this limitation --- its client-server architecture supports multiple simultaneous connections, enabling the scheduler, admin tool, monitor, and workers to access the database concurrently without conflicts. PostgreSQL also offers better scalability for the growing volume of eBPF metrics data.
+As the project grew and components such as the eBPF monitor, multiple executor instances, and concurrent worker processes were added, the database needed to handle simultaneous access from several independent programs. SQLite's file-level locking model allows only one writer at a time, making concurrent multi-process access impractical without contention. PostgreSQL was adopted to address this limitation: its client-server architecture supports multiple simultaneous connections, enabling the scheduler, admin tool, monitor, and workers to access the database concurrently without conflicts. PostgreSQL also offers better scalability for the growing volume of eBPF metrics data.
 
 SQLite remains available as a lightweight backend for smaller deployments, development, and testing scenarios where simplicity outweighs the need for concurrent access. This dual-backend approach ensures backward compatibility with existing SQLite-based installations while providing a migration path to PostgreSQL for larger deployments.
 
@@ -260,6 +260,13 @@ SQLite remains available as a lightweight backend for smaller deployments, devel
     \figimg{figures/er-diagram.png}
     \caption{Entity-Relationship diagram showing the database schema}
     \label{fig:er-diagram}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth, height=0.6\textheight, keepaspectratio]{er_diagram_from_sqlite.jpg}
+    \caption{Actual database schema visualized from the SQLite backend}
+    \label{fig:er-sqlite}
 \end{figure}
 
 \subsection{Relational Schema}
