@@ -11,47 +11,47 @@ This chapter presents a comprehensive analysis of the Distributed Job Scheduler 
 The functional requirements describe the specific behaviors and capabilities that the system must provide. They are illustrated using a use case diagram and detailed use case descriptions.
 
 \begin{figure}[htbp]
-    \centering
-    \figimg{figures/use-case.png}
-    \caption{Use case diagram showing actors and use cases for the Distributed Job Scheduler}
-    \label{fig:use-case}
+	\centering
+	\figimg{figures/use-case.png}
+	\caption{Use case diagram showing actors and use cases for the Distributed Job Scheduler}
+	\label{fig:use-case}
 \end{figure}
 
 \begin{description}
-    \item[Actor 1: Client (User)] A user who submits jobs to the system.
-    \item[Actor 2: Worker Node] A machine that receives and executes scheduled jobs.
-    \item[Actor 3: Administrator] A user responsible for managing authentication tokens.
-    \item[Actor 4: Scheduler] The central system component (also an actor for internal interactions).
+	\item[Actor 1: Client (User)] A user who submits jobs to the system.
+	\item[Actor 2: Worker Node] A machine that receives and executes scheduled jobs.
+	\item[Actor 3: Administrator] A user responsible for managing authentication tokens.
+	\item[Actor 4: Scheduler] The central system component (also an actor for internal interactions).
 \end{description}
 
 \textbf{Use Case Descriptions:}
 
 \begin{enumerate}
-    \item \textbf{Register Client:} A user registers as a client using a valid authentication token. The system validates the token, creates a client record, and returns a client ID.
-    
-    \item \textbf{Submit Job:} An authenticated client submits a job specifying the job type and parameters (e.g., CPU cores, memory size, duration). The system creates a job record with status \texttt{"not started"}.
-    
-    \item \textbf{Get Job Status:} A client queries the status of a previously submitted job. The system returns the current status (e.g., \texttt{"not started"}, \texttt{"ongoing"}, \texttt{"completed"}, \texttt{"failed"}).
-    
-    \item \textbf{Register Worker:} A worker registers with the scheduler, providing hardware specifications (CPU cores, memory size, disk size, CPU frequency, OS). The system validates the worker token and creates a worker record.
-    
-    \item \textbf{Poll for Job:} A registered worker requests a job assignment. The scheduler selects an appropriate job using the configured scheduling algorithm and assigns it to the worker.
-    
-    \item \textbf{Confirm Job Received:} After receiving a job assignment, the worker confirms receipt, updating the job status to \texttt{"scheduled"}.
-    
-    \item \textbf{Report Job Started:} The worker reports that job execution has begun, along with a resource snapshot (CPU and memory usage at start time).
-    
-    \item \textbf{Execute Job:} The worker creates an isolated environment (cgroup), forks the executor process, and monitors execution.
-    
-    \item \textbf{Report Worker Metrics:} The worker periodically sends system metrics (CPU, memory, disk, network, load average) to the scheduler.
-    
-    \item \textbf{Report eBPF Metrics:} The worker sends job-specific eBPF metrics (syscall counts, I/O bytes, network bytes, CPU usage, memory usage) at regular intervals.
-    
-    \item \textbf{Report Job Result:} Upon job completion, the worker reports the result (success/failure, message, artifact URL) to the scheduler.
-    
-    \item \textbf{Manage Tokens:} The administrator generates, lists, and revokes authentication tokens for both clients and workers.
-    
-    \item \textbf{Query Job Timeseries:} An authorized client or administrator retrieves historical eBPF metrics for a completed job.
+	\item \textbf{Register Client:} A user registers as a client using a valid authentication token. The system validates the token, creates a client record, and returns a client ID.
+
+	\item \textbf{Submit Job:} An authenticated client submits a job specifying the job type and parameters (e.g., CPU cores, memory size, duration). The system creates a job record with status \texttt{"not started"}.
+
+	\item \textbf{Get Job Status:} A client queries the status of a previously submitted job. The system returns the current status (e.g., \texttt{"not started"}, \texttt{"assigned"}, \texttt{"completed"}, \texttt{"failed"}).
+
+	\item \textbf{Register Worker:} A worker registers with the scheduler, providing hardware specifications (CPU cores, memory size, disk size, CPU frequency, OS). The system validates the worker token and creates a worker record.
+
+	\item \textbf{Poll for Job:} A registered worker requests a job assignment. The scheduler selects an appropriate job using the configured scheduling algorithm and assigns it to the worker.
+
+	\item \textbf{Confirm Job Received:} After receiving a job assignment, the worker confirms receipt, updating the job status to \texttt{"scheduled"}.
+
+	\item \textbf{Report Job Started:} The worker reports that job execution has begun, along with a resource snapshot (CPU and memory usage at start time).
+
+	\item \textbf{Execute Job:} The worker creates an isolated environment (cgroup), forks the executor process, and monitors execution.
+
+	\item \textbf{Report Worker Metrics:} The worker periodically sends system metrics (CPU, memory, disk, network, load average) to the scheduler.
+
+	\item \textbf{Report eBPF Metrics:} The worker sends job-specific eBPF metrics (syscall counts, I/O bytes, network bytes, CPU usage, memory usage) at regular intervals.
+
+	\item \textbf{Report Job Result:} Upon job completion, the worker reports the result (success/failure, message, artifact URL) to the scheduler.
+
+	\item \textbf{Manage Tokens:} The administrator generates, lists, and revokes authentication tokens for both clients and workers.
+
+	\item \textbf{Query Job Timeseries:} An authorized client or administrator retrieves historical eBPF metrics for a completed job.
 \end{enumerate}
 
 \subsubsection{Non-Functional Requirements}
@@ -59,17 +59,17 @@ The functional requirements describe the specific behaviors and capabilities tha
 The following non-functional requirements define the quality attributes of the system:
 
 \begin{description}
-    \item[Scalability:] The system should support adding new worker nodes without requiring modifications to the scheduler or existing workers. The database backend (PostgreSQL) should handle increasing volumes of job and metrics data.
-    
-    \item[Reliability:] The system must handle worker crashes gracefully. Workers should recover incomplete jobs on restart and report them as failed. The scheduler should continue operating even if individual workers become unavailable.
-    
-    \item[Security:] All inter-component communication must be authenticated using bearer tokens. Tokens must be revocable, and different token types (\texttt{client} vs. \texttt{worker}) must enforce different access permissions.
-    
-    \item[Performance:] The scheduler should be capable of handling concurrent job submissions and worker requests. Job selection and assignment should complete within milliseconds.
-    
-    \item[Maintainability:] The system should use well-defined interfaces and design patterns to facilitate maintenance and extension. New scheduling algorithms and job types should be addable without modifying existing code.
-    
-    \item[Portability:] The scheduler and CLI components should be buildable and runnable on any system with a C++20 compiler and the required dependencies. Only the worker component is Linux-specific due to eBPF and cgroup requirements.
+	\item[Scalability:] The system should support adding new worker nodes without requiring modifications to the scheduler or existing workers. The database backend (PostgreSQL) should handle increasing volumes of job and metrics data.
+
+	\item[Reliability:] The system must handle worker crashes gracefully. Workers should recover incomplete jobs on restart and report them as failed. The scheduler should continue operating even if individual workers become unavailable.
+
+	\item[Security:] All inter-component communication must be authenticated using bearer tokens. Tokens must be revocable, and different token types (\texttt{client} vs. \texttt{worker}) must enforce different access permissions.
+
+	\item[Performance:] The scheduler should be capable of handling concurrent job submissions and worker requests. Job selection and assignment should complete within milliseconds.
+
+	\item[Maintainability:] The system should use well-defined interfaces and design patterns to facilitate maintenance and extension. New scheduling algorithms and job types should be addable without modifying existing code.
+
+	\item[Portability:] The scheduler and CLI components should be buildable and runnable on any system with a C++20 compiler and the required dependencies. Only the worker component is Linux-specific due to eBPF and cgroup requirements.
 \end{description}
 
 \subsection{Feasibility Analysis}
@@ -90,13 +90,13 @@ System administrators with basic Linux knowledge can deploy and operate the syst
 
 All technologies used in the project are open-source and free of licensing costs:
 \begin{itemize}
-    \item C++20 compiler (Clang/GCC): open-source
-    \item CMake: open-source
-    \item gRPC and Protocol Buffers: Apache 2.0 license
-    \item SQLite: public domain
-    \item PostgreSQL: PostgreSQL license (permissive open-source)
-    \item libbpf: BSD license
-    \item Linux kernel: GPL v2
+	\item C++20 compiler (Clang/GCC): open-source
+	\item CMake: open-source
+	\item gRPC and Protocol Buffers: Apache 2.0 license
+	\item SQLite: public domain
+	\item PostgreSQL: PostgreSQL license (permissive open-source)
+	\item libbpf: BSD license
+	\item Linux kernel: GPL v2
 \end{itemize}
 
 The hardware requirements are modest: any modern x86-64 machine with a Linux distribution can serve as a scheduler or worker node.
@@ -114,36 +114,36 @@ This section presents the object-oriented analysis of the system using UML diagr
 The class diagram (Figure~\ref{fig:class-analysis}) shows the main classes and their relationships in the Distributed Job Scheduler system.
 
 \begin{figure}[htbp]
-    \centering
-    \figimg{figures/class-analysis.png}
-    \caption{Analysis-level class diagram showing key classes and relationships}
-    \label{fig:class-analysis}
+	\centering
+	\figimg{figures/class-analysis.png}
+	\caption{Analysis-level class diagram showing key classes and relationships}
+	\label{fig:class-analysis}
 \end{figure}
 
 The principal classes identified during analysis are:
 
 \begin{description}
-    \item[SchedulerServiceImpl:] The central gRPC service implementation. It handles all incoming RPCs and coordinates job scheduling, worker management, and metrics collection.
-    
-    \item[JobSelector (abstract):] Defines the interface for job selection strategies. Concrete implementations include FCFSSelector, SJFSelector, and AdaptiveSelector. This follows the Strategy design pattern.
-    
-    \item[ISchedulerDatabase (interface):] Provides a narrow interface for database queries needed by job selectors, following the Interface Segregation Principle.
-    
-    \item[SchedulerDatabase:] Implements the full database operations for the scheduler, including job CRUD, worker management, metrics storage, and analytics. Inherits from both the shared Database base class and ISchedulerDatabase.
-    
-    \item[WorkerClient:] The gRPC client used by worker nodes to communicate with the scheduler. Handles registration, job polling, metrics reporting, and result submission.
-    
-    \item[JobOrchestrator:] Manages the lifecycle of a job on the worker side, including cgroup creation, process forking, eBPF monitor management, and result collection.
-    
-    \item[JobExecutor (abstract):] Defines the interface for different executor types. Concrete implementations include StressCpuExecutor, StressMemExecutor, StressIOExecutor, and MixedLoadExecutor, with additional types addable through the same interface.
-    
-    \item[MetricsCollector:] Collects system-level metrics (CPU, memory, disk, network) by reading \texttt{/proc} filesystem entries.
-    
-    \item[EbpfMonitor:] Manages the lifecycle of the eBPF monitoring program, including loading the BPF object, attaching tracepoints, and polling BPF maps for metrics.
-    
-    \item[EbpfMetricStore:] Thread-safe accumulator for eBPF metrics snapshots, providing buffering between the eBPF reader threads and the metrics reporting thread.
-    
-    \item[ExecutorRegistry and JobSelectorRegistry:] Factory classes that manage the registration and creation of executor and selector implementations, respectively.
+	\item[SchedulerServiceImpl:] The central gRPC service implementation. It handles all incoming RPCs and coordinates job scheduling, worker management, and metrics collection.
+
+	\item[JobSelector (abstract):] Defines the interface for job selection strategies. Concrete implementations include FCFSSelector, SJFSelector, and AdaptiveSelector. This follows the Strategy design pattern.
+
+	\item[ISchedulerDatabase (interface):] Provides a narrow interface for database queries needed by job selectors, following the Interface Segregation Principle.
+
+	\item[SchedulerDatabase:] Implements the full database operations for the scheduler, including job CRUD, worker management, metrics storage, and analytics. Inherits from both the shared Database base class and ISchedulerDatabase.
+
+	\item[WorkerClient:] The gRPC client used by worker nodes to communicate with the scheduler. Handles registration, job polling, metrics reporting, and result submission.
+
+	\item[JobOrchestrator:] Manages the lifecycle of a job on the worker side, including cgroup creation, process forking, eBPF monitor management, and result collection.
+
+	\item[JobExecutor (abstract):] Defines the interface for different executor types. Concrete implementations include StressCpuExecutor, StressMemExecutor, StressIOExecutor, and MixedLoadExecutor, with additional types addable through the same interface.
+
+	\item[MetricsCollector:] Collects system-level metrics (CPU, memory, disk, network) by reading \texttt{/proc} filesystem entries.
+
+	\item[EbpfMonitor:] Manages the lifecycle of the eBPF monitoring program, including loading the BPF object, attaching tracepoints, and polling BPF maps for metrics.
+
+	\item[EbpfMetricStore:] Thread-safe accumulator for eBPF metrics snapshots, providing buffering between the eBPF reader threads and the metrics reporting thread.
+
+	\item[ExecutorRegistry and JobSelectorRegistry:] Factory classes that manage the registration and creation of executor and selector implementations, respectively.
 \end{description}
 
 \subsubsection{Sequence Diagrams}
@@ -151,44 +151,44 @@ The principal classes identified during analysis are:
 The sequence diagrams capture the dynamic interactions between objects during key system operations.
 
 \begin{figure}[htbp]
-    \centering
-    \figimg{figures/sequence-job-lifecycle.png}
-    \caption{Sequence diagram showing the complete job lifecycle from submission to completion}
-    \label{fig:sequence-job-lifecycle}
+	\centering
+	\figimg{figures/sequence-job-lifecycle.png}
+	\caption{Sequence diagram showing the complete job lifecycle from submission to completion}
+	\label{fig:sequence-job-lifecycle}
 \end{figure}
 
 \textbf{Job Lifecycle (Figure~\ref{fig:sequence-job-lifecycle}):}
 \begin{enumerate}
-    \item The Client submits a job via the CLI, which sends a \texttt{SubmitJob} gRPC request to the Scheduler. The Scheduler inserts a job record with status \texttt{"not started"}.
-    \item The Worker periodically sends \texttt{GetJob} requests. The Scheduler's \texttt{JobSelector} selects the most appropriate job and assigns it, updating the status to \texttt{"ongoing"}.
-    \item The Worker confirms receipt (\texttt{ConfirmJobReceived}), updating status to \texttt{"scheduled"}.
-    \item The Worker starts execution (\texttt{ReportJobStarted}), recording a resource snapshot.
-    \item The Worker forks the \texttt{JobOrchestrator}, which creates a cgroup and spawns the Executor process.
-    \item The \texttt{MetricsCollector} periodically gathers system metrics and sends \texttt{ReportWorkerMetrics} to the Scheduler.
-    \item The \texttt{EbpfMonitor} reads BPF maps and the \texttt{EbpfMetricStore} buffers snapshots, which are periodically sent via \texttt{ReportJobEbpfMetrics}.
-    \item Upon job completion, the \texttt{JobOrchestrator} parses the executor output and invokes the \texttt{on\_completed} callback, which sends \texttt{ReportJobResult} to the Scheduler.
-    \item The Scheduler saves the result and computes runtime analytics.
+	\item The Client submits a job via the CLI, which sends a \texttt{SubmitJob} gRPC request to the Scheduler. The Scheduler inserts a job record with status \texttt{"not started"}.
+	\item The Worker periodically sends \texttt{GetJob} requests. The Scheduler's \texttt{JobSelector} selects the most appropriate job and assigns it, updating the status to \texttt{"assigned"}.
+	\item The Worker confirms receipt (\texttt{ConfirmJobReceived}), updating status to \texttt{"scheduled"}.
+	\item The Worker starts execution (\texttt{ReportJobStarted}), recording a resource snapshot.
+	\item The Worker forks the \texttt{JobOrchestrator}, which creates a cgroup and spawns the Executor process.
+	\item The \texttt{MetricsCollector} periodically gathers system metrics and sends \texttt{ReportWorkerMetrics} to the Scheduler.
+	\item The \texttt{EbpfMonitor} reads BPF maps and the \texttt{EbpfMetricStore} buffers snapshots, which are periodically sent via \url{ReportJobEbpfMetrics}.
+	\item Upon job completion, the \texttt{JobOrchestrator} parses the executor output and invokes the \url{on_completed} callback, which sends \texttt{ReportJobResult} to the Scheduler.
+	\item The Scheduler saves the result and computes runtime analytics.
 \end{enumerate}
 
 \begin{figure}[htbp]
-    \centering
-    \figimg{figures/sequence-worker-registration.png}
-    \caption{Sequence diagram showing the worker registration process}
-    \label{fig:sequence-worker-registration}
+	\centering
+	\figimg{figures/sequence-worker-registration.png}
+	\caption{Sequence diagram showing the worker registration process}
+	\label{fig:sequence-worker-registration}
 \end{figure}
 
 \textbf{Worker Registration (Figure~\ref{fig:sequence-worker-registration}):}
 \begin{enumerate}
-    \item The Worker sends \texttt{RegisterWorker} with its hardware specs and authentication token.
-    \item The Scheduler validates the token, creates a worker record, and returns a worker ID.
-    \item The Worker caches the worker ID and token locally for crash recovery.
+	\item The Worker sends \texttt{RegisterWorker} with its hardware specs and authentication token.
+	\item The Scheduler validates the token, creates a worker record, and returns a worker ID.
+	\item The Worker caches the worker ID and token locally for crash recovery.
 \end{enumerate}
 
 \begin{figure}[htbp]
-    \centering
-    \figimg{figures/sequence-metrics-reporting.png}
-    \caption{Sequence diagram showing the periodic metrics reporting flow}
-    \label{fig:sequence-metrics-reporting}
+	\centering
+	\figimg{figures/sequence-metrics-reporting.png}
+	\caption{Sequence diagram showing the periodic metrics reporting flow}
+	\label{fig:sequence-metrics-reporting}
 \end{figure}
 
 \subsubsection{State Diagram}
@@ -196,20 +196,20 @@ The sequence diagrams capture the dynamic interactions between objects during ke
 The state diagram (Figure~\ref{fig:state-job-states}) captures the states and transitions of a job throughout its lifecycle.
 
 \begin{figure}[htbp]
-    \centering
-    \figimg{figures/state-job-states.png}
-    \caption{State diagram showing job states and transitions}
-    \label{fig:state-job-states}
+	\centering
+	\figimg{figures/state-job-states.png}
+	\caption{State diagram showing job states and transitions}
+	\label{fig:state-job-states}
 \end{figure}
 
 A job passes through the following states:
 \begin{description}
-    \item[not started:] Initial state after submission. The job is in the queue awaiting assignment.
-    \item[ongoing:] A worker has been assigned to the job, but the worker has not yet confirmed receipt.
-    \item[scheduled:] The worker has confirmed receiving the job assignment.
-    \item[started:] The worker has begun executing the job and recorded an initial resource snapshot.
-    \item[completed:] The job finished successfully.
-    \item[failed:] The job finished with an error or the worker crashed during execution.
+	\item[not started:] Initial state after submission. The job is in the queue awaiting assignment.
+	\item[assigned:] A worker has been assigned to the job, but the worker has not yet confirmed receipt.
+	\item[scheduled:] The worker has confirmed receiving the job assignment.
+	\item[started:] The worker has begun executing the job and recorded an initial resource snapshot.
+	\item[completed:] The job finished successfully.
+	\item[failed:] The job finished with an error or the worker crashed during execution.
 \end{description}
 
 \subsubsection{Activity Diagram}
@@ -217,18 +217,18 @@ A job passes through the following states:
 The activity diagram (Figure~\ref{fig:activity-workflow}) models the workflow of the job scheduling and execution process.
 
 \begin{figure}[htbp]
-    \centering
-    \figimg{figures/activity-workflow.png}
-    \caption{Activity diagram showing the scheduling and execution workflow}
-    \label{fig:activity-workflow}
+	\centering
+	\figimg{figures/activity-workflow.png}
+	\caption{Activity diagram showing the scheduling and execution workflow}
+	\label{fig:activity-workflow}
 \end{figure}
 
 The workflow proceeds as follows:
 \begin{enumerate}
-    \item The Client submits a job, which enters the scheduler's queue.
-    \item The Worker polls for a job; the Scheduler applies the selection algorithm.
-    \item If a suitable job is found, the Worker prepares the execution environment (cgroup creation, process fork).
-    \item The Executor runs the job; the eBPF monitor collects kernel-level metrics.
-    \item After execution, the Worker collects results and reports them to the Scheduler.
-    \item The Scheduler updates the job status and stores analytics for future scheduling decisions.
+	\item The Client submits a job, which enters the scheduler's queue.
+	\item The Worker polls for a job; the Scheduler applies the selection algorithm.
+	\item If a suitable job is found, the Worker prepares the execution environment (cgroup creation, process fork).
+	\item The Executor runs the job; the eBPF monitor collects kernel-level metrics.
+	\item After execution, the Worker collects results and reports them to the Scheduler.
+	\item The Scheduler updates the job status and stores analytics for future scheduling decisions.
 \end{enumerate}

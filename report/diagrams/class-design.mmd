@@ -1,5 +1,5 @@
 ---
-title: Refined Design-Level Class Diagram
+title: "Refined Class Diagram: Scheduler Side"
 ---
 classDiagram
     class SchedulerServiceImpl {
@@ -67,91 +67,6 @@ classDiagram
         +vector~Job~ get_jobs_by_status(status)
     }
 
-    class WorkerClient {
-        -unique_ptr~Stub~ stub_
-        -int worker_id_
-        -string token_
-        +WorkerClient(channel)
-        +int Register()
-        +optional~ReceivedJob~ GetJob()
-        +bool confirm_job_received(job_id)
-        +bool report_job_started(job_id)
-        +void store_job_result(job_id, result)
-        +void report_pending_results()
-        +void report_worker_metrics(metrics)
-        +void report_ebpf_metrics(job_id, snapshots)
-    }
-
-    class JobOrchestrator {
-        -map~int,JobHandle~ active_jobs_
-        -thread monitor_
-        -mutex mutex_
-        +function~void(int,JobResult)~ on_completed
-        +JobHandle execute(job_id, job_type, params)
-        -void monitor_loop()
-        -void teardown_job(job_id, result)
-        -void ebpf_reader_thread(job_id, fd)
-        -string make_cgroup(job_id)
-        -void remove_cgroup(path)
-        -JobResult parse_result(json)
-    }
-
-    class JobHandle {
-        +int job_id
-        +int pid
-        +string cgroup_path
-        +int result_fd
-        +thread ebpf_reader
-    }
-
-    class JobExecutor {
-        <<abstract>>
-        +string type()$
-        +JobResult execute(map~string,string~ params)$
-    }
-
-    class StressCpuExecutor {
-        +JobResult execute() override
-    }
-
-    class StressMemExecutor {
-        +JobResult execute() override
-    }
-
-    class StressIOExecutor {
-        +JobResult execute() override
-    }
-
-    class MixedLoadExecutor {
-        +JobResult execute() override
-    }
-
-    class MetricsCollector {
-        -CpuTimes prev_cpu_
-        -NetBytes prev_net_
-        -bool first_
-        +WorkerMetricsData collect()
-    }
-
-    class EbpfMonitor {
-        -bpf_object* obj_
-        -bpf_program* prog_
-        -bpf_link* link_
-        -int fd_syscall_count_, fd_io_bytes_, fd_net_bytes_
-        -int job_id_, target_pid_
-        +bool load_and_attach(bpf_path, job_id, cgroup_path, pid)
-        +EbpfSnapshot poll()
-        +void detach()
-    }
-
-    class EbpfMetricStore {
-        -mutex mutex_
-        -unordered_map~int,vector~JobEbpfMetrics~~ metrics_
-        +void add_snapshot(job_id, metrics)
-        +vector~JobEbpfMetrics~ drain(job_id)
-        +vector~int~ active_job_ids()
-    }
-
     SchedulerServiceImpl *--> SchedulerDatabase : owns
     SchedulerServiceImpl *--> JobSelector : owns
     SchedulerDatabase ..|> ISchedulerDatabase
@@ -160,14 +75,3 @@ classDiagram
     JobSelector <|-- SJFSelector
     JobSelector <|-- AdaptiveSelector
     JobSelector ..> ISchedulerDatabase : uses
-
-    JobExecutor <|-- StressCpuExecutor
-    JobExecutor <|-- StressMemExecutor
-    JobExecutor <|-- StressIOExecutor
-    JobExecutor <|-- MixedLoadExecutor
-
-    JobOrchestrator *--> JobHandle : manages
-    JobOrchestrator --> EbpfMetricStore : feeds
-    WorkerClient --> JobOrchestrator : orchestrates
-    WorkerClient --> MetricsCollector : reads
-    EbpfMonitor --> EbpfMetricStore : writes

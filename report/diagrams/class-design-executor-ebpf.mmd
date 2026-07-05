@@ -1,0 +1,51 @@
+---
+title: "Refined Class Diagram: Executor and eBPF"
+---
+classDiagram
+    class JobExecutor {
+        <<abstract>>
+        +string type()$
+        +JobResult execute(map~string,string~ params)$
+    }
+
+    class StressCpuExecutor {
+        +JobResult execute() override
+    }
+
+    class StressMemExecutor {
+        +JobResult execute() override
+    }
+
+    class StressIOExecutor {
+        +JobResult execute() override
+    }
+
+    class MixedLoadExecutor {
+        +JobResult execute() override
+    }
+
+    class EbpfMonitor {
+        -bpf_object* obj_
+        -bpf_program* prog_
+        -bpf_link* link_
+        -int fd_syscall_count_, fd_io_bytes_, fd_net_bytes_
+        -int job_id_, target_pid_
+        +bool load_and_attach(bpf_path, job_id, cgroup_path, pid)
+        +EbpfSnapshot poll()
+        +void detach()
+    }
+
+    class EbpfMetricStore {
+        -mutex mutex_
+        -unordered_map~int,vector~JobEbpfMetrics~~ metrics_
+        +void add_snapshot(job_id, metrics)
+        +vector~JobEbpfMetrics~ drain(job_id)
+        +vector~int~ active_job_ids()
+    }
+
+    JobExecutor <|-- StressCpuExecutor
+    JobExecutor <|-- StressMemExecutor
+    JobExecutor <|-- StressIOExecutor
+    JobExecutor <|-- MixedLoadExecutor
+
+    EbpfMonitor --> EbpfMetricStore : writes

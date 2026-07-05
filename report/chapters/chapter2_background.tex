@@ -20,15 +20,15 @@ In this project, the service interface is defined in a single \texttt{.proto} fi
 
 eBPF is a revolutionary Linux kernel technology that allows sandboxed programs to run within the kernel without modifying kernel source code or loading kernel modules. Originally developed for network packet filtering, eBPF has evolved into a general-purpose framework for observing, monitoring, and securely extending kernel behavior.
 
-In this project, eBPF is used to monitor job execution at the kernel level. The custom BPF program attaches to the \texttt{raw\_syscalls/sys\_enter} tracepoint, which fires on every system call entry. The program filters events by cgroup ID, ensuring that only system calls from the monitored job's cgroup are counted. It tracks three categories of system calls: \texttt{read}, \texttt{write}, and \texttt{openat}. Additionally, it monitors I/O byte counts (from read/write argument sizes) and network byte counts (from \texttt{sendto}/\texttt{recvfrom} argument sizes). These metrics are stored in BPF map data structures (specifically \texttt{BPF\_MAP\_TYPE\_PERCPU\_ARRAY}) for efficient per-CPU aggregation without locking.
+In this project, eBPF is used to monitor job execution at the kernel level. The custom BPF program attaches to the \url{raw_syscalls/sys_enter} tracepoint, which fires on every system call entry. The program filters events by cgroup ID, ensuring that only system calls from the monitored job's cgroup are counted. It tracks three categories of system calls: \texttt{read}, \texttt{write}, and \texttt{openat}. Additionally, it monitors I/O byte counts (from read/write argument sizes) and network byte counts (from \texttt{sendto}/\texttt{recvfrom} argument sizes). These metrics are stored in BPF map data structures (specifically \url{BPF_MAP_TYPE_PERCPU_ARRAY}) for efficient per-CPU aggregation without locking.
 
-The userspace \texttt{EbpfMonitor} component periodically reads these BPF maps, sums the per-CPU values, and combines them with cgroup-level metrics from \texttt{cpu.stat} and \texttt{memory.current} files to produce comprehensive per-job metric snapshots.
+The userspace \texttt{EbpfMonitor} component periodically reads these BPF maps, sums the per-CPU values, and combines them with cgroup-level metrics from \url{cpu.stat} and \url{memory.current} files to produce comprehensive per-job metric snapshots.
 
 \subsection{cgroups v2}
 
 Control Groups v2 (cgroups v2) is a Linux kernel feature that provides hierarchical organization and resource management of processes. It enables fine-grained control over CPU, memory, and I/O resource allocation, as well as resource accounting at the group level.
 
-The Distributed Job Scheduler creates a per-job cgroup under the hierarchy \texttt{/sys/fs/cgroup/djs/jobs/<job\_id>}. When a job process is forked, its PID is written to the cgroup's \texttt{cgroup.procs} file, placing it under the cgroup's resource controls. This provides two critical benefits: first, resource isolation ensures that a runaway job cannot consume all system resources and affect other jobs or the worker itself; second, resource accounting through cgroup files (\texttt{cpu.stat}, \texttt{memory.current}) provides accurate, cgroup-level metrics that are independent of process lifecycle (metrics persist even after individual processes exit).
+The Distributed Job Scheduler creates a per-job cgroup under the hierarchy \url{/sys/fs/cgroup/djs/jobs/job_id}. When a job process is forked, its PID is written to the cgroup's \url{cgroup.procs} file, placing it under the cgroup's resource controls. This provides two critical benefits: first, resource isolation ensures that a runaway job cannot consume all system resources and affect other jobs or the worker itself; second, resource accounting through cgroup files (\url{cpu.stat}, \url{memory.current}) provides accurate, cgroup-level metrics that are independent of process lifecycle (metrics persist even after individual processes exit).
 
 \subsection{Scheduling Algorithms}
 
@@ -73,22 +73,22 @@ The Distributed Job Scheduler's eBPF monitoring differs from these general-purpo
 Table~\ref{tab:comparison} summarizes the key differences between the Distributed Job Scheduler and existing systems.
 
 \begin{table}[htbp]
-\centering
-\caption{Comparison of Distributed Job Scheduler with Existing Systems}
-\label{tab:comparison}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lllll}
-\toprule
-\textbf{Feature} & \textbf{DJS} & \textbf{Kubernetes} & \textbf{Slurm} & \textbf{HTCondor} \\
-\midrule
-Primary domain & Batch job execution / General-purpose & Container orchestration & HPC batch & High-throughput computing \\
-eBPF monitoring & Built-in & External (Cilium) & No & No \\
-Scheduling & FCFS, SJF, Adaptive & Resource + custom & Priority + fairshare & Matchmaking (ClassAds) \\
-Job isolation & cgroups v2 & Containers & cgroups + containers & Containers \\
-Database & SQLite / PostgreSQL & etcd & MySQL / MariaDB & PostgreSQL \\
-Platform & Linux only & Cross-platform & Linux / UNIX & Linux / UNIX \\
-Setup complexity & Low & High & High & Medium \\
-\bottomrule
-\end{tabular}%
-}
+	\centering
+	\caption{Comparison of Distributed Job Scheduler with Existing Systems}
+	\label{tab:comparison}
+	\resizebox{\textwidth}{!}{%
+		\begin{tabular}{lllll}
+			\toprule
+			\textbf{Feature} & \textbf{DJS}                          & \textbf{Kubernetes}     & \textbf{Slurm}       & \textbf{HTCondor}         \\
+			\midrule
+			Primary domain   & Batch job execution / General-purpose & Container orchestration & HPC batch            & High-throughput computing \\
+			eBPF monitoring  & Built-in                              & External (Cilium)       & No                   & No                        \\
+			Scheduling       & FCFS, SJF, Adaptive                   & Resource + custom       & Priority + fairshare & Matchmaking (ClassAds)    \\
+			Job isolation    & cgroups v2                            & Containers              & cgroups + containers & Containers                \\
+			Database         & SQLite / PostgreSQL                   & etcd                    & MySQL / MariaDB      & PostgreSQL                \\
+			Platform         & Linux only                            & Cross-platform          & Linux / UNIX         & Linux / UNIX              \\
+			Setup complexity & Low                                   & High                    & High                 & Medium                    \\
+			\bottomrule
+		\end{tabular}%
+	}
 \end{table}

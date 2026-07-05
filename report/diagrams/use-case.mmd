@@ -8,33 +8,39 @@ flowchart TB
 
     subgraph System[Distributed Job Scheduler]
         direction TB
+
+        UC3(Register Client)
         UC1(Submit Job)
         UC2(Get Job Status)
-        UC3(Register Client)
+        UC11(Query Job Timeseries)
+
         UC4(Register Worker)
         UC5(Poll for Job)
         UC6(Confirm Job Received)
         UC7(Report Job Started)
+        UC10(Report Job Result)
         UC8(Report Worker Metrics)
         UC9(Report eBPF Metrics)
-        UC10(Report Job Result)
-        UC11(Query Job Timeseries)
+
         UC12(Manage Auth Tokens)
         UC13(Generate Token)
         UC14(Revoke Token)
+
+        UC12 --- UC13
+        UC12 --- UC14
     end
 
+    Actor1 --> UC3
     Actor1 --> UC1
     Actor1 --> UC2
-    Actor1 --> UC3
+    Actor1 --> UC11
+
     Actor2 --> UC4
     Actor2 --> UC5
     Actor2 --> UC6
     Actor2 --> UC7
+    Actor2 --> UC10
     Actor2 --> UC8
     Actor2 --> UC9
-    Actor2 --> UC10
-    Actor1 --> UC11
+
     Actor3 --> UC12
-    Actor3 --> UC13
-    Actor3 --> UC14

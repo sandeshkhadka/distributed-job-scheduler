@@ -3,12 +3,12 @@ title: Job State Diagram
 ---
 stateDiagram-v2
     [*] --> not_started : Job submitted
-    not_started --> ongoing : Worker assigned (GetJob)
-    ongoing --> scheduled : Worker confirmed (ConfirmJobReceived)
+    not_started --> assigned : Worker assigned (GetJob)
+    assigned --> scheduled : Worker confirmed (ConfirmJobReceived)
     scheduled --> started : Worker began execution (ReportJobStarted)
     started --> completed : Execution successful
     started --> failed : Execution error
-    ongoing --> failed : Worker crash (recovery)
+    assigned --> failed : Worker crash (recovery)
 
     completed --> [*]
     failed --> [*]
@@ -18,7 +18,7 @@ stateDiagram-v2
         worker assignment
     end note
 
-    note right of ongoing
+    note right of assigned
         Worker has been assigned
         but not yet confirmed
     end note

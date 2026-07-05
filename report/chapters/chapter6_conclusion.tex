@@ -13,7 +13,7 @@ The specific achievements of the project are:
 
 	\item \textbf{Isolated Job Execution:} Each job executes in a dedicated cgroup v2 environment, ensuring resource isolation and preventing interference between concurrent workloads. The fork/exec model provides process-level isolation, and per-job cgroup accounting enables accurate resource tracking independent of process lifecycle.
 
-	\item \textbf{Kernel-Level Monitoring:} The custom eBPF program, attached to the \texttt{raw\_syscalls/sys\_enter} tracepoint, provides real-time monitoring of system call activity, I/O operations, and network transfers at the kernel level. This represents a significant improvement over traditional process-level monitoring in terms of granularity and accuracy.
+	\item \textbf{Kernel-Level Monitoring:} The custom eBPF program, attached to the \url{raw_syscalls/sys_enter} tracepoint, provides real-time monitoring of system call activity, I/O operations, and network transfers at the kernel level. This represents a significant improvement over traditional process-level monitoring in terms of granularity and accuracy.
 
 	\item \textbf{Extensible Architecture:} The use of design patterns (Strategy for selectors and executors, Factory for registries, and Interface Segregation for database access) creates a system that is easily extensible. New job types and scheduling strategies can be added without modifying existing code.
 

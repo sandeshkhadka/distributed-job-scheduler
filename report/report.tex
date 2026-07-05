@@ -80,6 +80,7 @@
 % HYPERLINKS
 % ------------------------------------------------------------
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=blue,citecolor=black]{hyperref}
+\urlstyle{tt}
 
 % ------------------------------------------------------------
 % SOURCE CODE LISTINGS
@@ -135,6 +136,9 @@
 % Cover (no page number shown)
 \include{chapters/cover}
 
+% for front page
+\include{chapters/cover}
+
 % Certificate
 \include{chapters/certificate}
 
@@ -148,6 +152,9 @@
 \renewcommand{\contentsname}{Table of Contents}
 \tableofcontents
 \clearpage
+
+% List of Abbreviations
+\include{chapters/abbreviations}
 
 % List of Figures
 \addcontentsline{toc}{chapter}{List of Figures}
@@ -174,7 +181,7 @@
 
 % ---- APPENDICES ----
 \begin{appendices}
-\include{chapters/appendix}
+	\include{chapters/appendix}
 \end{appendices}
 
 \end{document}
