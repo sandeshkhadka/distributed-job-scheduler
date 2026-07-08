@@ -6,33 +6,33 @@ This section describes the fundamental concepts, technologies, and terminologies
 
 \subsection{Distributed Systems}
 
-A distributed system is a collection of independent computers that appear to its users as a single coherent system. In the context of job scheduling, distributed systems enable workload distribution across multiple machines, improving throughput, resource utilization, and fault tolerance. The Distributed Job Scheduler follows a centralized broker architecture, where a single scheduler component coordinates job distribution across multiple worker nodes. This architecture was chosen for its simplicity and ease of implementation while still providing the core benefits of distributed execution.
+A distributed system is a collection of independent computers that appear to its users as a single coherent system \cite{tannenbaum2007distributed}. In the context of job scheduling, distributed systems enable workload distribution across multiple machines, improving throughput, resource utilization, and fault tolerance. The Distributed Job Scheduler follows a centralized broker architecture, where a single scheduler component coordinates job distribution across multiple worker nodes. This architecture was chosen for its simplicity and ease of implementation while still providing the core benefits of distributed execution.
 
 Communication in distributed systems is typically handled through message passing or remote procedure calls. The project uses gRPC, a modern RPC framework developed by Google, for all inter-component communication. gRPC is built on top of HTTP/2 and uses Protocol Buffers for efficient, strongly-typed message serialization. The choice of gRPC over HTTP/REST was motivated by its performance advantages, built-in streaming support, and strong typing guarantees through auto-generated client and server stubs.
 
 \subsection{gRPC and Protocol Buffers}
 
-gRPC is a high-performance, open-source universal RPC framework that enables client-server communication in distributed systems. It uses HTTP/2 as the transport protocol, providing features such as multiplexing, flow control, header compression, and bidirectional streaming. Protocol Buffers (Protobuf) serve as the Interface Definition Language (IDL) and serialization format, offering a compact binary encoding that is more efficient than text-based formats like JSON or XML.
+gRPC \cite{grpc} is a high-performance, open-source universal RPC framework that enables client-server communication in distributed systems. It uses HTTP/2 as the transport protocol, providing features such as multiplexing, flow control, header compression, and bidirectional streaming. Protocol Buffers (Protobuf) \cite{protobuf} serve as the Interface Definition Language (IDL) and serialization format, offering a compact binary encoding that is more efficient than text-based formats like JSON or XML.
 
 In this project, the service interface is defined in a single \texttt{.proto} file that specifies 12 RPC methods and 26 message types. These cover the complete job lifecycle: worker registration, client registration, job submission, job listing, job polling, job status and result retrieval, metrics reporting, result reporting, and timeseries data retrieval. The Protobuf compiler generates C++ code for both the server stubs (implemented by the Scheduler) and client stubs (used by the CLI and Worker components), ensuring type safety across all communication boundaries.
 
 \subsection{eBPF (Extended Berkeley Packet Filter)}
 
-eBPF is a revolutionary Linux kernel technology that allows sandboxed programs to run within the kernel without modifying kernel source code or loading kernel modules. Originally developed for network packet filtering, eBPF has evolved into a general-purpose framework for observing, monitoring, and securely extending kernel behavior.
+eBPF \cite{ebpf} is a revolutionary Linux kernel technology that allows sandboxed programs to run within the kernel without modifying kernel source code or loading kernel modules. Originally developed for network packet filtering, eBPF has evolved into a general-purpose framework for observing, monitoring, and securely extending kernel behavior.
 
-In this project, eBPF is used to monitor job execution at the kernel level. The custom BPF program attaches to the \url{raw_syscalls/sys_enter} tracepoint, which fires on every system call entry. The program filters events by cgroup ID, ensuring that only system calls from the monitored job's cgroup are counted. It tracks three categories of system calls: \texttt{read}, \texttt{write}, and \texttt{openat}. Additionally, it monitors I/O byte counts (from read/write argument sizes) and network byte counts (from \texttt{sendto}/\texttt{recvfrom} argument sizes). These metrics are stored in BPF map data structures (specifically \url{BPF_MAP_TYPE_PERCPU_ARRAY}) for efficient per-CPU aggregation without locking.
+In this project, eBPF is used to monitor job execution at the kernel level. The custom BPF program attaches to the \url{raw_syscalls/sys_enter} tracepoint, which fires on every system call entry. The program filters events by cgroup ID, ensuring that only system calls from the monitored job's cgroup are counted. It tracks three categories of system calls: \texttt{read}, \texttt{write}, and \texttt{openat}. Additionally, it monitors I/O byte counts (from read/write argument sizes) and network byte counts (from \texttt{sendto}/\texttt{recvfrom} argument sizes). These metrics are stored in BPF map data structures (specifically \url{BPF_MAP_TYPE_PERCPU_ARRAY}) \cite{libbpf} for efficient per-CPU aggregation without locking.
 
 The userspace \texttt{EbpfMonitor} component periodically reads these BPF maps, sums the per-CPU values, and combines them with cgroup-level metrics from \url{cpu.stat} and \url{memory.current} files to produce comprehensive per-job metric snapshots.
 
 \subsection{cgroups v2}
 
-Control Groups v2 (cgroups v2) is a Linux kernel feature that provides hierarchical organization and resource management of processes. It enables fine-grained control over CPU, memory, and I/O resource allocation, as well as resource accounting at the group level.
+Control Groups v2 (cgroups v2) \cite{cgroupsv2} is a Linux kernel feature that provides hierarchical organization and resource management of processes. It enables fine-grained control over CPU, memory, and I/O resource allocation, as well as resource accounting at the group level.
 
 The Distributed Job Scheduler creates a per-job cgroup under the hierarchy \url{/sys/fs/cgroup/djs/jobs/job_id}. When a job process is forked, its PID is written to the cgroup's \url{cgroup.procs} file, placing it under the cgroup's resource controls. This provides two critical benefits: first, resource isolation ensures that a runaway job cannot consume all system resources and affect other jobs or the worker itself; second, resource accounting through cgroup files (\url{cpu.stat}, \url{memory.current}) provides accurate, cgroup-level metrics that are independent of process lifecycle (metrics persist even after individual processes exit).
 
 \subsection{Scheduling Algorithms}
 
-Scheduling is the process of selecting which job to assign to which worker at a given time. The project implements three distinct scheduling strategies:
+Scheduling is the process of selecting which job to assign to which worker at a given time. The project implements three distinct scheduling strategies \cite{gamma2004design}:
 
 \textbf{First-Come-First-Serve (FCFS):} The simplest strategy, which selects the oldest unassigned job based on its creation timestamp. FCFS provides fairness in terms of submission order but does not consider job characteristics or worker capacity.
 
@@ -46,25 +46,25 @@ This section reviews existing systems and research related to job scheduling, wo
 
 \subsection{Kubernetes}
 
-Kubernetes is the de-facto standard for container orchestration in production environments. It provides automated deployment, scaling, and management of containerized applications. Kubernetes includes a sophisticated scheduling system that considers resource requirements, constraints, affinity rules, and custom scheduling policies when placing pods onto nodes.
+Kubernetes \cite{kubernetes} is the de-facto standard for container orchestration in production environments. It provides automated deployment, scaling, and management of containerized applications. Kubernetes includes a sophisticated scheduling system that considers resource requirements, constraints, affinity rules, and custom scheduling policies when placing pods onto nodes.
 
 While Kubernetes is a powerful and comprehensive platform, its primary focus is on long-running services and microservices, not on batch job execution. The Distributed Job Scheduler is designed for batch job execution, offering features like built-in multi-type workload generators, cgroup-level eBPF monitoring, and analytics-driven scheduling that are not available in Kubernetes.
 
 \subsection{Slurm Workload Manager}
 
-Slurm (Simple Linux Utility for Resource Management) is a highly scalable workload manager used primarily in high-performance computing (HPC) environments. It provides job scheduling, resource allocation, parallel job execution, and accounting across large clusters.
+Slurm (Simple Linux Utility for Resource Management) \cite{slurm} is a highly scalable workload manager used primarily in high-performance computing (HPC) environments. It provides job scheduling, resource allocation, parallel job execution, and accounting across large clusters.
 
 Slurm's scheduling model is designed for scientific computing workloads that require massive parallelism, MPI (Message Passing Interface) support, and complex resource requirements (e.g., GPUs, interconnect topology). The Distributed Job Scheduler targets a different use case: lightweight batch job execution on commodity hardware. Its strength lies in the tight integration of eBPF monitoring with job execution, enabling detailed kernel-level observability that is not a focus of HPC workload managers.
 
 \subsection{HTCondor}
 
-HTCondor is a high-throughput computing system developed at the University of Wisconsin--Madison. It specializes in managing large numbers of compute jobs across distributed resources, with features for checkpointing, job migration, and opportunistic resource utilization.
+HTCondor \cite{htcondor} is a high-throughput computing system developed at the University of Wisconsin--Madison. It specializes in managing large numbers of compute jobs across distributed resources, with features for checkpointing, job migration, and opportunistic resource utilization.
 
 HTCondor's cycle-scavenging model (using idle desktop machines for computation) differs significantly from the Distributed Job Scheduler's dedicated worker model. Additionally, the Distributed Job Scheduler's focus on eBPF-enhanced monitoring and its pluggable scheduling strategy architecture represent distinct design choices tailored to batch job execution.
 
 \subsection{eBPF-Based Monitoring Research}
 
-The use of eBPF for observability has gained significant traction in recent years. Tools like BCC (BPF Compiler Collection) and bpftrace provide general-purpose tracing capabilities, while projects like Cilium use eBPF for networking, security, and observability in container environments.
+The use of eBPF for observability has gained significant traction in recent years. Tools like BCC (BPF Compiler Collection) \cite{bcc} and bpftrace provide general-purpose tracing capabilities, while projects like Cilium use eBPF for networking, security, and observability in container environments.
 
 The Distributed Job Scheduler's eBPF monitoring differs from these general-purpose tools by being tightly integrated with the job lifecycle. The monitor is automatically started and stopped per job, metrics are correlated with specific job IDs, and the data feeds directly into the scheduling analytics pipeline. This tight coupling between monitoring and scheduling is a distinguishing feature of the project.
 

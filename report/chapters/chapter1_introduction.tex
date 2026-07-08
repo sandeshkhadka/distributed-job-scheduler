@@ -25,9 +25,8 @@ The Distributed Job Scheduler addresses these problems through automated job dis
 The primary objectives of this project are:
 
 \begin{enumerate}
-    \item Design and implement a centralized gRPC-based scheduler with pluggable job selection strategies (FCFS, SJF, Adaptive) for intelligent job distribution across registered worker nodes.
-    \item Develop worker nodes that execute jobs in isolated cgroup v2 environments and integrate eBPF-based monitoring to capture real-time kernel-level metrics (syscalls, I/O, network, CPU, memory).
-    \item Provide dual database backends (SQLite and PostgreSQL) along with CLI and Admin tools supporting token-based authentication for job submission, status tracking, and system management.
+    \item Design and implement a centralized gRPC-based scheduler and a cli for interacting with it.
+    \item Develop worker nodes that execute jobs in isolated environments and integrate eBPF-based monitoring.
 \end{enumerate}
 
 \section{Scope and Limitations}
