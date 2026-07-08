@@ -1,0 +1,74 @@
+---
+title: "Analysis-Level Class Diagram: Worker Side"
+---
+classDiagram
+    class WorkerClient {
+        +Register()
+        +GetJob()
+        +confirm_job_received()
+        +report_job_started()
+        +report_job_result()
+        +report_worker_metrics()
+        +report_ebpf_metrics()
+    }
+
+    class JobOrchestrator {
+        +execute()
+        -monitor_loop()
+        -teardown_job()
+        -make_cgroup()
+        -remove_cgroup()
+    }
+
+    class JobExecutor {
+        <<abstract>>
+        +type()
+        +execute(params)$
+    }
+
+    class StressCpuExecutor {
+        +execute()
+    }
+
+    class StressMemExecutor {
+        +execute()
+    }
+
+    class StressIOExecutor {
+        +execute()
+    }
+
+    class MixedLoadExecutor {
+        +execute()
+    }
+
+    class MetricsCollector {
+        +collect()
+    }
+
+    class EbpfMonitor {
+        +load_and_attach()
+        +poll()
+        +detach()
+    }
+
+    class EbpfMetricStore {
+        +add_snapshot()
+        +drain()
+        +active_job_ids()
+    }
+
+    class ExecutorRegistry {
+        +init()$
+        +create(type)$
+    }
+
+    WorkerClient --> JobOrchestrator
+    WorkerClient --> MetricsCollector
+    WorkerClient --> EbpfMetricStore
+    JobOrchestrator *--> JobExecutor
+    JobExecutor <|-- StressCpuExecutor
+    JobExecutor <|-- StressMemExecutor
+    JobExecutor <|-- StressIOExecutor
+    JobExecutor <|-- MixedLoadExecutor
+    EbpfMonitor --> EbpfMetricStore : feeds

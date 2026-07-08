@@ -2,7 +2,7 @@
 
 \section{Design}
 
-This chapter presents the detailed design of the Distributed Job Scheduler system. Following the object-oriented approach established in the analysis chapter, it covers the refined class design, component architecture, deployment architecture, algorithm details, analysis of scheduling algorithms, and database design.
+This chapter presents the detailed design of the Distributed Job Scheduler system. Following the object-oriented approach established in the analysis chapter, it covers the refined class design, component architecture, deployment architecture, algorithm details, and database design.
 
 \subsection{Refined Class Diagrams}
 
@@ -35,11 +35,11 @@ The refined class diagrams provide detailed attributes, method signatures, and r
 	\item[SchedulerServiceImpl:] Implements the \url{djs::SchedulerService::Service} gRPC interface. Contains a \texttt{SchedulerDb} (typedef resolving to either \url{SchedulerDatabase} or \url{PgSchedulerDatabase}) and a \texttt{std::unique\_ptr<JobSelector>} for the strategy. Key methods include \texttt{SubmitJob}, \texttt{GetJob}, \texttt{RegisterWorker}, and \texttt{ReportJobResult}.
 
 	\item[JobSelector (abstract):] Declares the pure virtual method \texttt{select\_job(const Worker\&, const std::vector<Job>\&, ISchedulerDatabase\&)} and the \texttt{name()} accessor. Three concrete implementations exist:
-	      \begin{itemize}
-		      \item \textbf{FCFSSelector:} Selects the job with the earliest \url{created_at} timestamp.
-		      \item \textbf{SJFSelector:} Selects the job type with the shortest historical average duration, falling back to FCFS.
-		      \item \textbf{AdaptiveSelector:} Predicts resource impact using historical spikes and selects the oldest safe job.
-	      \end{itemize}
+		\begin{itemize}
+			\item \textbf{FCFSSelector:} Selects the job with the earliest \url{created_at} timestamp.
+			\item \textbf{SJFSelector:} Selects the job type with the shortest historical average duration, falling back to FCFS.
+			\item \textbf{AdaptiveSelector:} Predicts resource impact using historical spikes and selects the oldest safe job.
+		\end{itemize}
 
 	\item[JobSelectorRegistry:] Implements the Factory pattern. Maintains a map of string names to factory function pointers. The \texttt{create(name)} method instantiates the appropriate selector. Registered names include \texttt{"fcfs"}, \texttt{"sjf"}, and \texttt{"adaptive"}.
 
@@ -58,12 +58,12 @@ The refined class diagrams provide detailed attributes, method signatures, and r
 	\item[JobOrchestrator:] Manages the complete lifecycle of job execution. Contains a map of active job handles, a monitoring thread for child process reaping, and per-job eBPF reader threads. Key methods: \url{execute(job_id, job_type, params)} creates cgroup, forks executor, and monitors execution. The \url{on_completed} callback (\texttt{std::function}) is invoked when a job finishes.
 
 	\item[JobExecutor (abstract):] Declares \texttt{execute(const std::map<std::string, std::string>\& params)} returning \texttt{JobResult}. Concrete implementations:
-	      \begin{itemize}
-		      \item \textbf{StressCpuExecutor:} Spawns N threads running CPU-intensive operations (sqrt, sin, cos).
-		      \item \textbf{StressMemExecutor:} Allocates N MB of memory with memset and holds it for the specified duration.
-		      \item \textbf{StressIOExecutor:} Performs file write/read operations on a temporary file.
-		      \item \textbf{MixedLoadExecutor:} Concurrently runs CPU, memory, and I/O stress threads.
-	      \end{itemize}
+		\begin{itemize}
+			\item \textbf{StressCpuExecutor:} Spawns N threads running CPU-intensive operations (sqrt, sin, cos).
+			\item \textbf{StressMemExecutor:} Allocates N MB of memory with memset and holds it for the specified duration.
+			\item \textbf{StressIOExecutor:} Performs file write/read operations on a temporary file.
+			\item \textbf{MixedLoadExecutor:} Concurrently runs CPU, memory, and I/O stress threads.
+		\end{itemize}
 
 	\item[MetricsCollector:] Reads \url{/proc/stat}, \url{/proc/meminfo}, \url{/proc/net/dev}, and \texttt{statvfs} to collect system-level metrics. Tracks deltas for CPU and network rates.
 
@@ -140,93 +140,42 @@ The system is deployed as follows:
 
 The FCFS algorithm is the simplest scheduling strategy. It selects the oldest unassigned job from the queue.
 
-\begin{lstlisting}[caption=FCFS Scheduling Algorithm,label=lst:fcfs]
-select_job(worker, jobs, db):
-    oldest_job = null
-    for each job in jobs:
-        if job.status == "not started":
-            if oldest_job is null or
-               job.created_at < oldest_job.created_at:
-                oldest_job = job
-    return oldest_job
-\end{lstlisting}
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/fcfs-flowchart.png}
+	\caption{FCFS Scheduling Algorithm Flowchart}
+	\label{fig:fcfs-flowchart}
+\end{figure}
+
+FCFS serves as the baseline scheduling strategy in the project. It requires no historical data, no worker metrics, and no database queries beyond fetching the job queue: it simply selects the oldest unassigned job. This makes it the simplest and most predictable algorithm to understand and debug.
+
+The main benefit of FCFS is its simplicity: it has no dependencies on worker reporting or historical analytics, so it works from the moment the scheduler starts. However, this simplicity is also its main limitation. FCFS has no knowledge of job characteristics (duration, resource requirements) or worker capacity. A CPU-intensive job can be assigned to an already overloaded worker, and short jobs can be stuck behind long ones, reducing overall throughput. The scheduler assigns jobs blindly without knowing whether the worker can handle them.
 
 \subsection{Shortest-Job-First (SJF)}
 
 The SJF algorithm uses historical runtime data to predict job duration and selects the job type with the shortest expected execution time.
 
-\begin{lstlisting}[caption=SJF Scheduling Algorithm,label=lst:sjf]
-select_job(worker, jobs, db):
-    avg_durations = db.get_avg_durations()  // map<job_type, avg_duration_ms>
-    best_job = null
-    best_duration = INFINITY
-    
-    for each job in jobs:
-        if job.status != "not started":
-            continue
-        if avg_durations contains job.job_type:
-            duration = avg_durations[job.job_type]
-            if duration < best_duration:
-                best_duration = duration
-                best_job = job
-    
-    // Fallback to FCFS if no historical data
-    if best_job is null:
-        return fcfs_select(worker, jobs, db)
-    
-    return best_job
-\end{lstlisting}
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/sjf-flowchart.png}
+	\caption{SJF Scheduling Algorithm Flowchart}
+	\label{fig:sjf-flowchart}
+\end{figure}
 
 The algorithm queries the \url{job_runtime_analytics} table to compute average durations per job type. For job types without historical records, it falls back to the FCFS strategy to ensure forward progress and bootstrap analytics data.
+
+SJF improves on FCFS by using historical runtime data to prioritize shorter jobs. The key benefit is higher throughput: by executing shorter jobs first, more jobs can complete per unit time compared to FCFS, which is especially beneficial when the queue contains a mix of short and long jobs. However, SJF still does not consider the worker's current resource utilization. A short but CPU-intensive job may still be assigned to an overloaded worker, potentially degrading performance for all jobs on that node. The duration-based heuristic is also an approximation at best, since actual runtime can vary significantly with system conditions.
 
 \subsection{Adaptive Scheduling}
 
 The Adaptive algorithm considers both the worker's current resource utilization and the historical resource spikes of each job type to make informed scheduling decisions that avoid overloading workers.
 
-\begin{lstlisting}[caption=Adaptive Scheduling Algorithm,label=lst:adaptive]
-select_job(worker, jobs, db):
-    metrics = db.get_worker_latest_metrics(worker.id)
-    if metrics is null:
-        return fcfs_select(worker, jobs, db)
-    
-    spikes = db.get_avg_spikes()  // map<job_type, JobTypeSpikes>
-    
-    safe_known_job = null
-    oldest_unknown_job = null
-    
-    for each job in jobs:
-        if job.status != "not started":
-            continue
-        
-        if spikes contains job.job_type:
-            spike = spikes[job.job_type]
-            
-            // Predict resource usage after spike
-            pred_cpu = metrics.cpu_percent + spike.avg_cpu_spike
-            pred_mem = metrics.memory_used_mb +
-                       (spike.avg_memory_spike *
-                        metrics.memory_total_mb / 100.0) +
-                       200.0  // safety buffer
-            
-            if pred_cpu <= 100.0 AND
-               pred_mem <= metrics.memory_total_mb:
-                if safe_known_job is null or
-                   job.created_at < safe_known_job.created_at:
-                    safe_known_job = job
-        else:
-            // Unknown job type - needs bootstrapping
-            if oldest_unknown_job is null or
-               job.created_at < oldest_unknown_job.created_at:
-                oldest_unknown_job = job
-    
-    // Priority: safe known > oldest unknown
-    if safe_known_job is not null:
-        return safe_known_job
-    if oldest_unknown_job is not null:
-        return oldest_unknown_job
-    
-    return null  // No suitable job
-\end{lstlisting}
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/adaptive-flowchart.png}
+	\caption{Adaptive Scheduling Algorithm Flowchart}
+	\label{fig:adaptive-flowchart}
+\end{figure}
 
 The Adaptive algorithm uses the following prediction model:
 
@@ -235,29 +184,13 @@ The Adaptive algorithm uses the following prediction model:
 	\item \textbf{Predicted Memory:} \texttt{current\_memory + (avg\_memory\_spike\_pct * total\_memory / 100) + 200MB}. The 200 MB safety buffer accounts for measurement inaccuracies and transient allocations.
 \end{itemize}
 
-Jobs with historical spike data that are predicted to fit within the worker's capacity are classified as \url{safe_known}. Jobs of unknown types are classified as \texttt{unknown} and are accepted only when no safe known jobs are available, ensuring that the system gathers analytics data for new job types while prioritizing safe assignments.
-
-\section{Analysis of Scheduling Algorithms}
-
-This section analyzes the three scheduling strategies in terms of their trade-offs, limitations, and suitability for different deployment scenarios.
-
-\subsection{First-Come-First-Serve (FCFS)}
-
-FCFS serves as the baseline scheduling strategy in the project. It requires no historical data, no worker metrics, and no database queries beyond fetching the job queue: it simply selects the oldest unassigned job. This makes it the simplest and most predictable algorithm to understand and debug.
-
-The main benefit of FCFS is its simplicity: it has no dependencies on worker reporting or historical analytics, so it works from the moment the scheduler starts. However, this simplicity is also its main limitation. FCFS has no knowledge of job characteristics (duration, resource requirements) or worker capacity. A CPU-intensive job can be assigned to an already overloaded worker, and short jobs can be stuck behind long ones, reducing overall throughput. The scheduler assigns jobs blindly without knowing whether the worker can handle them.
-
-\subsection{Shortest-Job-First (SJF)}
-
-SJF improves on FCFS by using historical runtime data to prioritize shorter jobs. The key benefit is higher throughput: by executing shorter jobs first, more jobs can complete per unit time compared to FCFS, which is especially beneficial when the queue contains a mix of short and long jobs. However, SJF still does not consider the worker's current resource utilization. A short but CPU-intensive job may still be assigned to an overloaded worker, potentially degrading performance for all jobs on that node. The duration-based heuristic is also an approximation at best, since actual runtime can vary significantly with system conditions.
-
-\subsection{Adaptive Scheduling}
+Jobs with historical spike data that are predicted to fit within the worker's capacity are classified as \texttt{safe\_known}. Jobs of unknown types are classified as \texttt{unknown} and are accepted only when no safe known jobs are available, ensuring that the system gathers analytics data for new job types while prioritizing safe assignments.
 
 Compared to FCFS and SJF, the Adaptive algorithm offers several key advantages. First, it is capacity-aware: it considers both the worker's current CPU and memory utilization and the historical resource spikes of each job type, rejecting assignments that would overload the worker. Second, its predictions improve over time as more jobs complete and spike data accumulates in the analytics tables. Third, it handles cold-start scenarios gracefully by accepting unknown job types for bootstrapping when no safe known jobs are available, ensuring the system can still make progress while gathering data.
 
 The main limitation is its dependence on worker metrics reporting: if a worker has not yet sent its first metrics snapshot, the algorithm cannot make predictions and returns no assignment (the worker continues polling until metrics arrive). Additionally, the prediction model is a heuristic that may not capture complex interactions between multiple concurrent jobs sharing the same worker.
 
-Among the three strategies, Adaptive is the most suitable for production use. It combines FCFS fairness (oldest-first among safe jobs) with data-driven capacity planning, making informed decisions that protect worker stability while maximizing throughput. This behavior is confirmed empirically in the testing section (test case \url{AdaptivePreventsOverloadWhileFCFSAndSJFDoNot} in Table~\ref{tab:unit_tests}): given a worker at 80\% CPU with a short CPU-heavy job and a longer I/O job, both FCFS and SJF select the CPU job and would overload the worker to 110\%, while Adaptive correctly rejects it and selects the safe I/O job. FCFS is best suited as a simple fallback or for debugging when no historical data or metrics are available. SJF provides a middle ground when runtime data exists but capacity awareness is not required. Adaptive is the recommended default because it alone accounts for the worker's actual state when making scheduling decisions.
+Among the three strategies, Adaptive is the most suitable for production use. It combines FCFS fairness (oldest-first among safe jobs) with data-driven capacity planning, making informed decisions that protect worker stability while maximizing throughput. This behavior is confirmed empirically in the testing section (test case \texttt{AdaptivePreventsOverloadWhileFCFSAndSJFDoNot} in Table~\ref{tab:unit_tests}): given a worker at 80\% CPU with a short CPU-heavy job and a longer I/O job, both FCFS and SJF select the CPU job and would overload the worker to 110\%, while Adaptive correctly rejects it and selects the safe I/O job. FCFS is best suited as a simple fallback or for debugging when no historical data or metrics are available. SJF provides a middle ground when runtime data exists but capacity awareness is not required. Adaptive is the recommended default because it alone accounts for the worker's actual state when making scheduling decisions.
 
 \section{Database Design}
 
@@ -288,50 +221,25 @@ SQLite remains available as a lightweight backend for smaller deployments, devel
 The database consists of the following tables:
 
 \begin{description}
-	\item[\texttt{clients}:] Stores registered client information. Fields: \texttt{id} (PK), \texttt{name}, \texttt{status}.
+	\item[\texttt{clients}:] Stores registered client information.
 
-	\item[\url{workers}:] Stores registered worker node specifications. Fields: \texttt{id} (PK), \texttt{cpu\_cores}, \texttt{mem\_size}, \texttt{disk\_size}, \texttt{cpu\_freq}, \texttt{os}, \texttt{name}, \texttt{status}.
+	\item[\url{workers}:] Stores registered worker node specifications.
 
-	\item[\texttt{jobs}:] Central table storing job definitions. Fields: \texttt{id} (PK), \texttt{job\_type}, \texttt{params}, \texttt{status}, \texttt{client\_id} (FK $\rightarrow$ clients), \texttt{created\_at}, \texttt{updated\_at}.
+	\item[\texttt{jobs}:] Central table storing job definitions.
 
-	\item[\url{job_worker}:] Join table for the many-to-many relationship between jobs and workers. Fields: \texttt{job\_id} (FK, composite PK), \texttt{worker\_id} (FK, composite PK).
+	\item[\url{job_worker}:] Join table for the many-to-many relationship between jobs and workers.
 
-	\item[\texttt{job\_results}:] Stores job completion results. Fields: \texttt{job\_id} (PK, FK $\rightarrow$ jobs), \texttt{success}, \texttt{message}, \texttt{artifact\_url}, \texttt{metrics\_json}, \texttt{completed\_at}.
+	\item[\texttt{job\_results}:] Stores job completion results.
 
-	\item[\texttt{auth\_tokens}:] Stores authentication tokens. Fields: \texttt{id} (PK), \texttt{token} (unique), \texttt{description}, \texttt{token\_type} (CHECK 'client' or 'worker'), \texttt{active}, \texttt{created\_at}.
+	\item[\texttt{auth\_tokens}:] Stores authentication tokens.
 
-	\item[\url{client_token_usage}:] Tracks which tokens are used by which clients. Fields: \texttt{id} (PK), \texttt{client\_id} (FK), \texttt{token\_id} (FK), \texttt{last\_used\_at}, UNIQUE(\texttt{client\_id}, \texttt{token\_id}).
+	\item[\url{client_token_usage}:] Tracks which tokens are used by which clients.
 
-	\item[\url{worker_metrics}:] Latest metrics snapshot per worker (1:1 relationship). Fields: \texttt{worker\_id} (PK, FK), \texttt{cpu\_percent}, \texttt{memory\_percent}, \texttt{memory\_used\_mb}, \texttt{memory\_total\_mb}, \texttt{disk\_used\_mb}, \texttt{disk\_total\_mb}, \texttt{disk\_percent}, \texttt{rx\_bytes\_per\_sec}, \texttt{tx\_bytes\_per\_sec}, \texttt{load\_avg\_1m}, \texttt{active\_jobs}, \texttt{reported\_at}.
+	\item[\url{worker_metrics}:] Latest metrics snapshot per worker (1:1 relationship).
 
-	\item[\url{job_runtime_snapshots}:] Per-job start and peak resource metrics (1:1 relationship). Fields: \texttt{job\_id} (PK, FK), \texttt{started\_at}, \texttt{start\_cpu\_percent}, \texttt{start\_memory\_percent}, \texttt{peak\_cpu\_percent}, \texttt{peak\_memory\_percent}.
+	\item[\url{job_runtime_snapshots}:] Per-job start and peak resource metrics (1:1 relationship).
 
-	\item[\url{job_runtime_analytics}:] Historical runtime analytics records. Fields: \texttt{id} (PK), \texttt{job\_id} (FK), \texttt{job\_type}, \texttt{duration\_ms}, \texttt{cpu\_spike\_percent}, \texttt{memory\_spike\_percent}, \texttt{peak\_cpu\_percent}, \texttt{peak\_memory\_percent}, \texttt{recorded\_at}.
+	\item[\url{job_runtime_analytics}:] Historical runtime analytics records.
 
-	\item[\url{job_ebpf_metrics}:] Fine-grained eBPF metrics data points. Fields: \texttt{id} (PK), \texttt{job\_id} (FK), \texttt{worker\_id} (FK), \texttt{recorded\_at}, \texttt{syscall\_read\_count}, \texttt{syscall\_write\_count}, \texttt{syscall\_openat\_count}, \texttt{io\_read\_bytes}, \texttt{io\_write\_bytes}, \texttt{net\_tx\_bytes}, \texttt{net\_rx\_bytes}, \texttt{cpu\_usage\_us}, \texttt{mem\_current\_bytes}. Indexed on (\texttt{job\_id}, \texttt{recorded\_at}).
+	\item[\url{job_ebpf_metrics}:] Fine-grained eBPF metrics data points.
 \end{description}
-
-\subsection{Relationship Summary}
-
-Table~\ref{tab:relationships} summarizes the relationships between entities.
-
-\begin{table}[htbp]
-	\centering
-	\caption{Entity Relationships}
-	\label{tab:relationships}
-	\begin{tabularx}{\textwidth}{lll}
-		\toprule
-		\textbf{Parent}       & \textbf{Child}          & \textbf{Relationship} \\
-		\midrule
-		clients               & jobs                    & 1 to many             \\
-		jobs                  & job\_results            & 1 to 1                \\
-		jobs                  & job\_runtime\_snapshots & 1 to 1                \\
-		jobs                  & job\_runtime\_analytics & 1 to many             \\
-		jobs                  & job\_ebpf\_metrics      & 1 to many             \\
-		jobs, workers         & job\_worker             & Many to many (join)   \\
-		workers               & worker\_metrics         & 1 to 1                \\
-		workers               & job\_ebpf\_metrics      & 1 to many             \\
-		clients, auth\_tokens & client\_token\_usage    & Many to many (join)   \\
-		\bottomrule
-	\end{tabularx}
-\end{table}

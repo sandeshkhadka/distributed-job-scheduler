@@ -111,16 +111,16 @@ This section presents the object-oriented analysis of the system using UML diagr
 
 \subsubsection{Class Diagram}
 
-The class diagram (Figure~\ref{fig:class-analysis}) shows the main classes and their relationships in the Distributed Job Scheduler system.
+The class diagrams presented below show the main classes identified during analysis, grouped by subsystem for legibility.
 
 \begin{figure}[htbp]
 	\centering
-	\figimg{figures/class-analysis.png}
-	\caption{Analysis-level class diagram showing key classes and relationships}
-	\label{fig:class-analysis}
+	\figimg{figures/class-analysis-scheduler.png}
+	\caption{Analysis-level class diagram: Scheduler-side classes}
+	\label{fig:class-analysis-scheduler}
 \end{figure}
 
-The principal classes identified during analysis are:
+The scheduler-side classes identified during analysis are:
 
 \begin{description}
 	\item[SchedulerServiceImpl:] The central gRPC service implementation. It handles all incoming RPCs and coordinates job scheduling, worker management, and metrics collection.
@@ -131,6 +131,19 @@ The principal classes identified during analysis are:
 
 	\item[SchedulerDatabase:] Implements the full database operations for the scheduler, including job CRUD, worker management, metrics storage, and analytics. Inherits from both the shared Database base class and ISchedulerDatabase.
 
+	\item[JobSelectorRegistry:] Factory class that manages the registration and creation of selector implementations.
+\end{description}
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/class-analysis-worker.png}
+	\caption{Analysis-level class diagram: Worker-side classes}
+	\label{fig:class-analysis-worker}
+\end{figure}
+
+The worker-side classes identified during analysis are:
+
+\begin{description}
 	\item[WorkerClient:] The gRPC client used by worker nodes to communicate with the scheduler. Handles registration, job polling, metrics reporting, and result submission.
 
 	\item[JobOrchestrator:] Manages the lifecycle of a job on the worker side, including cgroup creation, process forking, eBPF monitor management, and result collection.
@@ -143,7 +156,7 @@ The principal classes identified during analysis are:
 
 	\item[EbpfMetricStore:] Thread-safe accumulator for eBPF metrics snapshots, providing buffering between the eBPF reader threads and the metrics reporting thread.
 
-	\item[ExecutorRegistry and JobSelectorRegistry:] Factory classes that manage the registration and creation of executor and selector implementations, respectively.
+	\item[ExecutorRegistry:] Factory class that manages the registration and creation of executor implementations.
 \end{description}
 
 \subsubsection{Sequence Diagrams}
