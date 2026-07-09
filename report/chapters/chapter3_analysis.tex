@@ -8,7 +8,7 @@ This chapter presents a comprehensive analysis of the Distributed Job Scheduler 
 
 \subsubsection{Functional Requirements}
 
-The functional requirements describe the specific behaviors and capabilities that the system must provide. They are illustrated using a use case diagram and detailed use case descriptions.
+The functional requirements describe the specific behaviors and capabilities that the system must provide, as illustrated in the use case diagram (Figure~\ref{fig:use-case}). Detailed use case descriptions follow.
 
 \begin{figure}[htbp]
 	\centering
@@ -120,7 +120,7 @@ The class diagrams presented below show the main classes identified during analy
 	\label{fig:class-analysis-scheduler}
 \end{figure}
 
-The scheduler-side classes identified during analysis are:
+The scheduler-side classes identified during analysis (Figure~\ref{fig:class-analysis-scheduler}) are:
 
 \begin{description}
 	\item[SchedulerServiceImpl:] The central gRPC service implementation. It handles all incoming RPCs and coordinates job scheduling, worker management, and metrics collection.
@@ -141,7 +141,7 @@ The scheduler-side classes identified during analysis are:
 	\label{fig:class-analysis-worker}
 \end{figure}
 
-The worker-side classes identified during analysis are:
+The worker-side classes identified during analysis (Figure~\ref{fig:class-analysis-worker}) are:
 
 \begin{description}
 	\item[WorkerClient:] The gRPC client used by worker nodes to communicate with the scheduler. Handles registration, job polling, metrics reporting, and result submission.
@@ -170,7 +170,7 @@ The sequence diagrams capture the dynamic interactions between objects during ke
 	\label{fig:sequence-job-lifecycle}
 \end{figure}
 
-\textbf{Job Lifecycle (Figure~\ref{fig:sequence-job-lifecycle}):}
+The job lifecycle sequence (Figure~\ref{fig:sequence-job-lifecycle}) proceeds as follows:
 \begin{enumerate}
 	\item The Client submits a job via the CLI, which sends a \texttt{SubmitJob} gRPC request to the Scheduler. The Scheduler inserts a job record with status \texttt{"not started"}.
 	\item The Worker periodically sends \texttt{GetJob} requests. The Scheduler's \texttt{JobSelector} selects the most appropriate job and assigns it, updating the status to \texttt{"assigned"}.
@@ -190,7 +190,7 @@ The sequence diagrams capture the dynamic interactions between objects during ke
 	\label{fig:sequence-worker-registration}
 \end{figure}
 
-\textbf{Worker Registration (Figure~\ref{fig:sequence-worker-registration}):}
+The worker registration sequence (Figure~\ref{fig:sequence-worker-registration}) proceeds as follows:
 \begin{enumerate}
 	\item The Worker sends \texttt{RegisterWorker} with its hardware specs and authentication token.
 	\item The Scheduler validates the token, creates a worker record, and returns a worker ID.

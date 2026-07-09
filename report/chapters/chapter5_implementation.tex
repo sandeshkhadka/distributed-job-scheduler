@@ -81,6 +81,8 @@ The scheduler is the central component of the system. Its implementation is stru
 
 \textbf{Database selection:} The \url{SchedulerDb} typedef resolves to either \url{SchedulerDatabase} (SQLite) or \url{PgSchedulerDatabase} (PostgreSQL) based on the \url{USE_PG} compile-time flag, enabling backend selection without code changes.
 
+The scheduler startup output is shown in Figure~\ref{fig:scheduler-startup}.
+
 \begin{figure}[htbp]
 	\centering
 	\includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_scheduler_startup.jpg}
@@ -114,6 +116,8 @@ The worker module is the most complex component, managing job polling, execution
 \end{enumerate}
 
 \textbf{Crash recovery:} On startup, \url{recover_pending_jobs()} checks for any jobs in non-terminal states (\texttt{received}, \texttt{scheduled}, \texttt{started}, \texttt{assigned}) and automatically reports them as failed to the scheduler.
+
+The worker startup output is shown in Figure~\ref{fig:worker-startup}.
 
 \begin{figure}[htbp]
 	\centering
@@ -155,7 +159,7 @@ The eBPF monitor consists of two parts: the in-kernel BPF program and the usersp
 
 \subsubsection{CLI Client Module}
 
-The CLI client provides a command-line interface for users to interact with the scheduler. It uses the \texttt{CliParser} class (based on the third-party \url{argparse.hpp} library) with subcommands:
+The CLI client (Figures~\ref{fig:cli-submit},~\ref{fig:cli-jobs}, and~\ref{fig:cli-result}) provides a command-line interface for users to interact with the scheduler. It uses the \texttt{CliParser} class (based on the third-party \url{argparse.hpp} library) with subcommands:
 
 \begin{itemize}
 	\item \texttt{register --token <token>}: Registers the client with the scheduler. The returned client ID and authentication token are cached locally in \url{cli.db} via the \texttt{CliDatabase} class.
@@ -198,7 +202,7 @@ The admin tool manages authentication tokens through subcommands:
 
 \subsubsection{Dashboard Module}
 
-The dashboard is a web application built with Node.js and Express that provides a browser-based interface for monitoring the system. It connects directly to the PostgreSQL database (bypassing gRPC) and reads job, worker, and metrics data for display.
+The dashboard (Figures~\ref{fig:dashboard-jobs} and~\ref{fig:dashboard-metrics}) is a web application built with Node.js and Express that provides a browser-based interface for monitoring the system. It connects directly to the PostgreSQL database (bypassing gRPC) and reads job, worker, and metrics data for display.
 
 The dashboard is organized into the following views:
 
@@ -341,7 +345,7 @@ End-to-end system testing validated the complete job lifecycle. Table~\ref{tab:s
 
 \subsection{Result Analysis}
 
-The automated test suite was built and executed on a Fedora 43 system with GCC 15.2.1 and Google Test 1.15.2. All 23 tests passed successfully with zero failures.
+The automated test suite was built and executed on a Fedora 43 system with GCC 15.2.1 and Google Test 1.15.2. All 23 tests passed successfully with zero failures. The complete system overview is shown in Figure~\ref{fig:overall}.
 
 \begin{figure}[htbp]
 	\centering

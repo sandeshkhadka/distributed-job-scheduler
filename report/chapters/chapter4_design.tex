@@ -6,7 +6,7 @@ This chapter presents the detailed design of the Distributed Job Scheduler syste
 
 \subsection{Refined Class Diagrams}
 
-The refined class diagrams provide detailed attributes, method signatures, and relationships for the core classes identified during analysis.
+The refined class diagrams (Figures~\ref{fig:class-design}, \ref{fig:class-design-worker}, and \ref{fig:class-design-executor-ebpf}) provide detailed attributes, method signatures, and relationships for the core classes identified during analysis.
 
 \begin{figure}[htbp]
 	\centering
@@ -138,7 +138,7 @@ The system is deployed as follows:
 
 \subsection{First-Come-First-Serve (FCFS)}
 
-The FCFS algorithm is the simplest scheduling strategy. It selects the oldest unassigned job from the queue.
+The FCFS algorithm (Figure~\ref{fig:fcfs-flowchart}) is the simplest scheduling strategy. It selects the oldest unassigned job from the queue.
 
 \begin{figure}[htbp]
 	\centering
@@ -153,7 +153,7 @@ The main benefit of FCFS is its simplicity: it has no dependencies on worker rep
 
 \subsection{Shortest-Job-First (SJF)}
 
-The SJF algorithm uses historical runtime data to predict job duration and selects the job type with the shortest expected execution time.
+The SJF algorithm (Figure~\ref{fig:sjf-flowchart}) uses historical runtime data to predict job duration and selects the job type with the shortest expected execution time.
 
 \begin{figure}[htbp]
 	\centering
@@ -168,7 +168,7 @@ SJF improves on FCFS by using historical runtime data to prioritize shorter jobs
 
 \subsection{Adaptive Scheduling}
 
-The Adaptive algorithm considers both the worker's current resource utilization and the historical resource spikes of each job type to make informed scheduling decisions that avoid overloading workers.
+The Adaptive algorithm (Figure~\ref{fig:adaptive-flowchart}) considers both the worker's current resource utilization and the historical resource spikes of each job type to make informed scheduling decisions that avoid overloading workers.
 
 \begin{figure}[htbp]
 	\centering
