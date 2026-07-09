@@ -43,6 +43,10 @@ CliParser::CliParser(int argc, char* argv[]) : _dist_cli("dist_cli") {
     _result_cmd.add_argument("--id").required().help("Job ID to query");
     _result_cmd.add_argument("--refresh").flag().help("Force refresh from scheduler");
 
+    this->_dist_cli.add_argument("--scheduler", "-s")
+        .default_value(std::string("localhost:50051"))
+        .help("Scheduler address (default: localhost:50051)");
+
     this->_dist_cli.add_subparser(_submit_cmd);
     this->_dist_cli.add_subparser(_register_cmd);
     this->_dist_cli.add_subparser(_query_cmd);
@@ -115,6 +119,10 @@ bool CliParser::has_flag(const std::string& flag) {
         return false;
     }
     return false;
+}
+
+std::string CliParser::get_scheduler_address() const {
+    return _dist_cli.get<std::string>("--scheduler");
 }
 
 void CliParser::print_help() { std::cout << _dist_cli; }

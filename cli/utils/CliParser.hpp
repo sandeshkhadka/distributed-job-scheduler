@@ -27,6 +27,7 @@ class CliParser {
     std::string get_value(const std::string&);
     std::vector<std::string> get_list(const std::string&);
     bool has_flag(const std::string& flag);
+    std::string get_scheduler_address() const;
 };
 
 #endif

@@ -17,9 +17,14 @@ int main(int argc, char* argv[]) {
         cli_parser.print_help();
     }
 
+    std::string scheduler_addr = cli_parser.get_scheduler_address();
+    std::shared_ptr<grpc::Channel> channel =
+        grpc::CreateChannel(scheduler_addr, grpc::InsecureChannelCredentials());
+
+    std::string hostname = scheduler_addr.substr(0, scheduler_addr.find(':'));
+
     if (action == "submit") {
-        SchedulerClient client(
-            grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
+        SchedulerClient client(channel);
 
         std::string job_type = cli_parser.get_value("--type");
         auto param_list = cli_parser.get_list("--param");
@@ -40,15 +45,13 @@ int main(int argc, char* argv[]) {
     if (action == "register") {
         std::string token = cli_parser.get_value("--token");
         std::cout << "Registering...\n";
-        SchedulerClient client(
-            grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
-        client.RegisterClient("localhost", token);
+        SchedulerClient client(channel);
+        client.RegisterClient(hostname, token);
     }
 
     if (action == "jobs") {
         bool refresh = cli_parser.has_flag("--refresh");
-        SchedulerClient client(
-            grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
+        SchedulerClient client(channel);
         client.ListMyJobs(refresh);
     }
 
@@ -60,8 +63,7 @@ int main(int argc, char* argv[]) {
         }
         bool refresh = cli_parser.has_flag("--refresh");
         int job_id = std::stoi(job_id_str);
-        SchedulerClient client(
-            grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
+        SchedulerClient client(channel);
         client.GetJobResult(job_id, refresh);
     }
 }

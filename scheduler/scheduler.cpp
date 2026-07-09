@@ -12,6 +12,12 @@ int main() {
 
     SchedulerServiceImpl service;
     service.job_selector_ = registry.create(algo);
+
+#if defined(USE_PG) && USE_PG
+    Logger::Info("Database backend: PostgreSQL");
+#else
+    Logger::Info("Database backend: SQLite");
+#endif
     if (!service.job_selector_) {
         Logger::Error("Unknown job selection algorithm: " + algo);
         return 1;
