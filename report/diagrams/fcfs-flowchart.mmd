@@ -1,0 +1,14 @@
+flowchart TD
+    A([Start]) --> B[Scan job queue]
+    B --> C[Next job in queue]
+    C --> D{"Eligible?<br>(status = not_started)"}
+    D -->|No| C
+    D -->|Yes| E{"Earliest submission<br>so far?"}
+    E -->|No| C
+    E -->|Yes| F[Track as candidate]
+    F --> C
+    C -.->|All scanned| G{Candidate found?}
+    G -->|Yes| H[Return earliest eligible job]
+    G -->|No| I[Return empty]
+    H --> J([End])
+    I --> J

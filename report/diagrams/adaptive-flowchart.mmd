@@ -1,0 +1,11 @@
+flowchart TD
+    A([Start]) --> B[New job submissions]
+    B --> C[Assess current worker load & capacity]
+    C --> D[Retrieve per-job resource history]
+    D --> E[Predict resource impact of each job]
+    E --> F[Select job with best cluster-fit]
+    F --> G{Capacity available?}
+    G -->|Yes| H[Assign to best-suited worker]
+    G -->|No| I[Fallback: select by submission order]
+    H --> J([End])
+    I --> J

@@ -14,6 +14,8 @@ class CliParser {
     ArgumentParser _query_cmd{"query"};
     ArgumentParser _cancel_cmd{"cancel"};
     ArgumentParser _list_cmd{"list"};
+    ArgumentParser _jobs_cmd{"jobs"};
+    ArgumentParser _result_cmd{"result"};
     std::vector<std::string> _actions;
     DJS::Logger _logger;
 
@@ -24,6 +26,7 @@ class CliParser {
     void print_help();
     std::string get_value(const std::string&);
     std::vector<std::string> get_list(const std::string&);
+    bool has_flag(const std::string& flag);
 };
 
 #endif

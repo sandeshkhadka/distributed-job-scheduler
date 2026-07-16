@@ -18,6 +18,21 @@ sudo pacman -S clang cmake clang-tools-extra llvm-libs
 sudo pacman -S grpc protobuf
 ```
 
+### Test dependencies
+
+Google Test 1.15.2+ is required. Install it via your package manager or build
+from source.
+
+Fedora:
+```bash
+sudo dnf install gtest-devel
+```
+
+Arch:
+```bash
+sudo pacman -S gtest
+```
+
 ## Setup
 
 ```
@@ -32,6 +47,24 @@ git config core.hooksPath .githooks
 cmake -B build
 cmake --build build
 ```
+
+## Testing
+
+Tests use Google Test and cover selectors (FCFS, SJF, Adaptive), database schema
+operations, metric store, and metrics collection. Build tests separately with:
+
+```bash
+cmake -B build -DBUILD_TESTS=ON
+cmake --build build --target run_tests
+```
+
+Run the test binary:
+
+```bash
+./build/tests/run_tests
+```
+
+The test suite includes 22 unit tests across 6 suites (3 selectors, database, metric store, metrics collector). All tests run in ~2 ms and do not require root or libbpf-devel.
 
 ## Usage
 
@@ -92,6 +125,20 @@ Submit jobs with `--type` and repeatable `--param`:
 ./build/cli submit --type mixed_load --param cpu_cores=2 --param mem_mb=64 --param io_mb=16 --param duration_ms=5000
 ```
 
+List your submitted jobs (results cached locally; use `--refresh` to fetch fresh data):
+
+```
+./build/cli jobs
+./build/cli jobs --refresh
+```
+
+Get a specific job's result:
+
+```
+./build/cli result --id 1
+./build/cli result --id 1 --refresh
+```
+
 Job types and their parameters:
 
 | Type | Params | Defaults | Behavior |
@@ -120,7 +167,23 @@ The token is cached in `workers.db` after the first successful registration. If 
 
 The worker auto-detects the `djs-executor` binary relative to its own location. `./build/worker` looks for `./build/djs-executor`. Passing `--executor` overrides this.
 
-### 4. Quick start
+### 4. Dashboard (experimental, requires PostgreSQL)
+
+A web-based monitoring dashboard is available at `dashboard/`. It connects directly to the PostgreSQL database and provides read-only views of jobs, workers, and metrics.
+
+```bash
+cd dashboard
+npm install
+PORT=3000 node server.js
+```
+
+Open `http://localhost:3000` in a browser.
+
+The dashboard shows an overview with summary statistics, a workers page with live metrics, a jobs page filterable by status, and detail pages for individual workers and jobs with eBPF metrics timeseries data. REST API endpoints are available at `/api/workers/:id/metrics`, `/api/workers/:id/jobs`, and `/api/jobs/:id/ebpf`.
+
+Note: The dashboard requires a running PostgreSQL instance with the scheduler database. It does not work with the SQLite backend.
+
+### 5. Quick start
 
 Open four terminals:
 

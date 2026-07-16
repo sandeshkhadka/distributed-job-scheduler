@@ -322,6 +322,59 @@ SchedulerServiceImpl::ReportJobEbpfMetrics(grpc::ServerContext* context,
     return grpc::Status::OK;
 }
 
+grpc::Status SchedulerServiceImpl::GetJobStatus(grpc::ServerContext* context,
+                                                const djs::GetJobStatusRequest* request,
+                                                djs::GetJobStatusReply* reply) {
+    auto auth = check_auth(context, db, "client");
+    if (!auth.ok()) {
+        auth = check_auth(context, db, "worker");
+        if (!auth.ok())
+            return auth;
+    }
+
+    int job_id = std::stoi(request->job_id());
+    auto result = db.get_job_result(job_id);
+
+    if (result.job_id == 0) {
+        return grpc::Status(grpc::StatusCode::NOT_FOUND, "job not found");
+    }
+
+    reply->set_status(result.status);
+    reply->set_assigned_worker_id("");
+    if (!result.completed_at.empty()) {
+        reply->set_has_result(true);
+        reply->set_success(result.success);
+        reply->set_result_message(result.message);
+        reply->set_artifact_url(result.artifact_url);
+        reply->set_completed_at(result.completed_at);
+    } else {
+        reply->set_has_result(false);
+    }
+
+    return grpc::Status::OK;
+}
+
+grpc::Status SchedulerServiceImpl::GetClientJobs(grpc::ServerContext* context,
+                                                 const djs::GetClientJobsRequest* request,
+                                                 djs::GetClientJobsResponse* reply) {
+    auto auth = check_auth(context, db, "client");
+    if (!auth.ok())
+        return auth;
+
+    int client_id = request->client_id();
+    auto jobs = db.get_jobs_by_client_id(client_id);
+
+    for (const auto& j : jobs) {
+        auto* info = reply->add_jobs();
+        info->set_job_id(j.id);
+        info->set_job_type(j.job_type);
+        info->set_status(j.status);
+        info->set_created_at(j.created_at);
+    }
+
+    return grpc::Status::OK;
+}
+
 grpc::Status SchedulerServiceImpl::GetJobTimeseries(grpc::ServerContext* context,
                                                     const djs::GetJobTimeseriesRequest* request,
                                                     djs::GetJobTimeseriesResponse* reply) {

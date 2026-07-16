@@ -44,4 +44,24 @@ int main(int argc, char* argv[]) {
             grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
         client.RegisterClient("localhost", token);
     }
+
+    if (action == "jobs") {
+        bool refresh = cli_parser.has_flag("--refresh");
+        SchedulerClient client(
+            grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
+        client.ListMyJobs(refresh);
+    }
+
+    if (action == "result") {
+        std::string job_id_str = cli_parser.get_value("--id");
+        if (job_id_str.empty()) {
+            std::cout << "Error: --id <job_id> is required for 'result' action\n";
+            return 1;
+        }
+        bool refresh = cli_parser.has_flag("--refresh");
+        int job_id = std::stoi(job_id_str);
+        SchedulerClient client(
+            grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
+        client.GetJobResult(job_id, refresh);
+    }
 }

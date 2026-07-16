@@ -1,0 +1,9 @@
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+The Distributed Job Scheduler automates the orchestration, scheduling, and execution of computational jobs across remote machines, addressing manual coordination challenges via a centralized gRPC-based scheduler that monitors execution in real-time using eBPF (Extended Berkeley Packet Filter). The system comprises a Scheduler server with pluggable job selection algorithms (FCFS, SJF, and Adaptive considering worker utilization and historical behavior), Worker nodes executing jobs in forked child processes isolated through cgroups v2, a CLI client, and an Admin tool. The eBPF subsystem attaches to kernel tracepoints, collecting fine-grained metrics including syscall counts, I/O throughput, network activity, CPU usage, and memory consumption. Both SQLite and PostgreSQL backends provide persistent storage for job definitions, worker registrations, metrics, and analytics data. The project demonstrates the effective integration of modern Linux kernel technologies with distributed systems design, creating a robust, extensible platform with pluggable scheduling architecture and kernel-level visibility into job behavior.
+
+\vspace{1em}
+\noindent\textbf{Keywords:} distributed systems, job scheduling, gRPC, eBPF, cgroups, resource monitoring, C++, Linux kernel, task orchestration, performance metrics
+
+\clearpage

@@ -1,0 +1,10 @@
+flowchart TD
+    A([Start]) --> B[New job submissions]
+    B --> C[Estimate job duration from historical data]
+    C --> D[Queue ordered by estimated duration]
+    D --> E{History available?}
+    E -->|Yes| F[Select shortest-estimated job]
+    E -->|No| G[Fallback: select by submission order]
+    F --> H[Assign to available worker]
+    G --> H
+    H --> I([End])

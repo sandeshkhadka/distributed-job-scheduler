@@ -1,0 +1,74 @@
+---
+title: "Analysis-Level Class Diagram: Scheduler Side"
+---
+classDiagram
+    class SchedulerServiceImpl {
+        +SubmitJob()
+        +GetJob()
+        +RegisterWorker()
+        +RegisterClient()
+        +ReportJobResult()
+        +ReportWorkerMetrics()
+        +ReportJobEbpfMetrics()
+        +ConfirmJobReceived()
+        +ReportJobStarted()
+        +GetJobTimeseries()
+        +GetJobStatus()
+    }
+
+    class JobSelector {
+        <<abstract>>
+        +name()
+        +select_job(worker, jobs, db)$
+    }
+
+    class FCFSSelector {
+        +select_job()
+    }
+
+    class SJFSelector {
+        +select_job()
+    }
+
+    class AdaptiveSelector {
+        +select_job()
+    }
+
+    class ISchedulerDatabase {
+        <<interface>>
+        +is_token_valid()
+        +get_worker_latest_metrics()
+        +get_avg_durations()
+        +get_avg_spikes()
+    }
+
+    class SchedulerDatabase {
+        +insert_job()
+        +get_job_by_id()
+        +register_worker()
+        +insert_worker_job()
+        +save_worker_metrics()
+        +save_job_result()
+        +save_job_analytics()
+        +save_ebpf_metrics()
+    }
+
+    class Database {
+        +insert_job()
+        +get_job_by_id()
+        +get_jobs_by_status()
+    }
+
+    class JobSelectorRegistry {
+        +init_all()
+        +create(name)
+    }
+
+    SchedulerServiceImpl *--> SchedulerDatabase
+    SchedulerServiceImpl *--> JobSelector
+    SchedulerDatabase ..|> ISchedulerDatabase
+    SchedulerDatabase --|> Database
+    JobSelector <|-- FCFSSelector
+    JobSelector <|-- SJFSelector
+    JobSelector <|-- AdaptiveSelector
+    JobSelector ..> ISchedulerDatabase : uses

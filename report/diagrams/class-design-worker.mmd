@@ -1,0 +1,51 @@
+---
+title: "Refined Class Diagram: Worker Side"
+---
+classDiagram
+    class WorkerClient {
+        -unique_ptr~Stub~ stub_
+        -int worker_id_
+        -string token_
+        +WorkerClient(channel)
+        +int Register()
+        +optional~ReceivedJob~ GetJob()
+        +bool confirm_job_received(job_id)
+        +bool report_job_started(job_id)
+        +void store_job_result(job_id, result)
+        +void report_pending_results()
+        +void report_worker_metrics(metrics)
+        +void report_ebpf_metrics(job_id, snapshots)
+    }
+
+    class JobOrchestrator {
+        -map~int,JobHandle~ active_jobs_
+        -thread monitor_
+        -mutex mutex_
+        +function~void(int,JobResult)~ on_completed
+        +JobHandle execute(job_id, job_type, params)
+        -void monitor_loop()
+        -void teardown_job(job_id, result)
+        -void ebpf_reader_thread(job_id, fd)
+        -string make_cgroup(job_id)
+        -void remove_cgroup(path)
+        -JobResult parse_result(json)
+    }
+
+    class JobHandle {
+        +int job_id
+        +int pid
+        +string cgroup_path
+        +int result_fd
+        +thread ebpf_reader
+    }
+
+    class MetricsCollector {
+        -CpuTimes prev_cpu_
+        -NetBytes prev_net_
+        -bool first_
+        +WorkerMetricsData collect()
+    }
+
+    WorkerClient --> JobOrchestrator : orchestrates
+    WorkerClient --> MetricsCollector : reads
+    JobOrchestrator *--> JobHandle : manages

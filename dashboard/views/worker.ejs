@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>djs-admin - Worker <%= worker.id %></title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <h1 class="logo">djs</h1>
+    <nav>
+      <a href="/">Overview</a>
+      <a href="/workers" class="active">Workers</a>
+      <a href="/jobs">Jobs</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <h2>Worker #<%= worker.id %> — <%= worker.name %></h2>
+    <div class="cards">
+      <div class="card small"><span class="label">CPU</span><span class="num"><%= worker.cpu_percent !== null ? worker.cpu_percent.toFixed(1) + '%' : '-' %></span></div>
+      <div class="card small"><span class="label">Memory</span><span class="num"><%= worker.memory_percent !== null ? worker.memory_percent.toFixed(1) + '%' : '-' %></span></div>
+      <div class="card small"><span class="label">Load</span><span class="num"><%= worker.load_avg_1m !== null ? worker.load_avg_1m.toFixed(2) : '-' %></span></div>
+      <div class="card small"><span class="label">Disk</span><span class="num"><%= worker.disk_percent !== null ? worker.disk_percent.toFixed(1) + '%' : '-' %></span></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="active">Active Jobs (<%= active_jobs.length %>)</button>
+      <button class="tab" data-tab="history">History (<%= history.length %>)</button>
+      <button class="tab" data-tab="resources">Resources</button>
+    </div>
+
+    <div id="tab-active" class="tab-content active">
+      <% if (active_jobs.length === 0) { %><p class="muted">No active jobs.</p><% } else { %>
+      <table>
+        <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Created</th></tr></thead>
+        <tbody>
+          <% active_jobs.forEach(j => { %>
+          <tr><td><a href="/jobs/<%= j.id %>"><%= j.id %></a></td><td><%= j.job_type %></td><td><span class="badge <%= j.status %>"><%= j.status %></span></td><td><%= j.created_at %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <% } %>
+    </div>
+
+    <div id="tab-history" class="tab-content">
+      <% if (history.length === 0) { %><p class="muted">No completed jobs.</p><% } else { %>
+      <table>
+        <thead><tr><th>ID</th><th>Type</th><th>Result</th><th>Duration</th><th>CPU Spike</th><th>Mem Spike</th><th>Completed</th></tr></thead>
+        <tbody>
+          <% history.forEach(j => { %>
+          <tr>
+            <td><a href="/jobs/<%= j.id %>"><%= j.id %></a></td>
+            <td><%= j.job_type %></td>
+            <td><%= j.success ? '✓' : '✗' %> <%= j.message || '' %></td>
+            <td><%= j.duration_ms ? (j.duration_ms / 1000).toFixed(1) + 's' : '-' %></td>
+            <td><%= j.cpu_spike_percent ? j.cpu_spike_percent.toFixed(1) + '%' : '-' %></td>
+            <td><%= j.memory_spike_percent ? j.memory_spike_percent.toFixed(1) + '%' : '-' %></td>
+            <td><%= j.completed_at || '-' %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <div class="chart-row">
+        <div class="chart-box"><canvas id="durationChart"></canvas></div>
+        <div class="chart-box"><canvas id="resultChart"></canvas></div>
+      </div>
+      <% } %>
+    </div>
+
+    <div id="tab-resources" class="tab-content">
+      <p class="muted">CPU &amp; Memory usage over time</p>
+      <div class="chart-row">
+        <div class="chart-box"><canvas id="cpuMemChart"></canvas></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const contents = document.querySelectorAll('.tab-content');
+    tabs.forEach(t => t.addEventListener('click', () => {
+      tabs.forEach(x => x.classList.remove('active'));
+      contents.forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    }));
+
+    // Duration bar chart (history)
+    const histData = <%- JSON.stringify(history) %>;
+    if (histData.length > 0) {
+      const durations = histData.filter(j => j.duration_ms).map(j => ({ id: j.id, dur: j.duration_ms / 1000 }));
+      new Chart(document.getElementById('durationChart'), {
+        type: 'bar',
+        data: {
+          labels: durations.map(d => '#' + d.id),
+          datasets: [{ label: 'Duration (s)', data: durations.map(d => d.dur), backgroundColor: '#4f7cff' }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+      });
+
+      const ok = histData.filter(j => j.success === 1 || j.success === true).length;
+      const fail = histData.length - ok;
+      new Chart(document.getElementById('resultChart'), {
+        type: 'pie',
+        data: {
+          labels: ['Success', 'Failed'],
+          datasets: [{ data: [ok, fail], backgroundColor: ['#22c55e', '#ef4444'] }]
+        },
+        options: { responsive: true }
+      });
+    }
+
+    // Resource chart (fetched from API)
+    fetch('/api/workers/<%= worker.id %>/metrics')
+      .then(r => r.json())
+      .then(data => {
+        if (data.length === 0) return;
+        const labels = data.map(d => new Date(d.reported_at).toLocaleTimeString());
+        new Chart(document.getElementById('cpuMemChart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: 'CPU %', data: data.map(d => d.cpu_percent), borderColor: '#4f7cff', yAxisID: 'y' },
+              { label: 'Memory %', data: data.map(d => d.memory_percent), borderColor: '#22c55e', yAxisID: 'y1' }
+            ]
+          },
+          options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true, max: 100, position: 'left' }, y1: { beginAtZero: true, max: 100, position: 'right', grid: { drawOnChartArea: false } } }
+          }
+        });
+      });
+  </script>
+</body>
+</html>

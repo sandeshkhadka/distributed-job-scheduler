@@ -36,6 +36,26 @@ message GetJobStatusRequest {
 message GetJobStatusReply {
   string status = 1;
   string assigned_worker_id = 2;
+  bool has_result = 3;
+  bool success = 4;
+  string result_message = 5;
+  string artifact_url = 6;
+  string completed_at = 7;
+}
+
+message GetClientJobsRequest {
+  int32 client_id = 1;
+}
+
+message ClientJobInfo {
+  int32 job_id = 1;
+  string job_type = 2;
+  string status = 3;
+  string created_at = 4;
+}
+
+message GetClientJobsResponse {
+  repeated ClientJobInfo jobs = 1;
 }
 
 message GetJobRequest {
@@ -156,4 +176,5 @@ service SchedulerService {
   rpc ReportWorkerMetrics(WorkerMetrics) returns (ReportWorkerMetricsResponse);
   rpc ReportJobEbpfMetrics(ReportJobEbpfMetricsRequest) returns (ReportJobEbpfMetricsResponse);
   rpc GetJobTimeseries(GetJobTimeseriesRequest) returns (GetJobTimeseriesResponse);
+  rpc GetClientJobs(GetClientJobsRequest) returns (GetClientJobsResponse);
 }

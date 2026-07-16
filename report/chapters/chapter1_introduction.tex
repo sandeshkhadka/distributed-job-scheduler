@@ -1,0 +1,83 @@
+\chapter{Introduction}
+
+\section{Introduction}
+Running computational jobs across multiple machines manually is a challenge; it requires configuring each node individually, coordinating execution, and collecting results without a unified platform. As distributed systems grow in complexity, the need for automated job distribution and centralized monitoring becomes essential.
+
+The Distributed Job Scheduler (DJS) addresses this need by providing a centralized platform for distributing and executing computational jobs across a cluster of remote worker nodes. The system follows a client-server architecture where a central Scheduler manages job queues, assigns work to registered Workers, and collects execution results. Workers execute jobs in isolated environments using Linux cgroups v2, ensuring that concurrent workloads do not interfere with each other. A custom eBPF-based monitoring subsystem provides real-time, kernel-level visibility into each job's resource consumption, including system call activity, I/O throughput, network usage, CPU utilization, and memory footprint.
+
+The scheduler employs a strategy pattern for job selection, supporting multiple algorithms: First-Come-First-Serve (FCFS), Shortest-Job-First (SJF), and an Adaptive algorithm that considers worker capacity and historical job behavior. This design allows the system to make intelligent scheduling decisions that optimize resource utilization across the cluster.
+
+All inter-component communication is handled through gRPC, a high-performance Remote Procedure Call (RPC) framework, with Protocol Buffers for message serialization. The system supports dual database backends: SQLite for lightweight, embedded deployments and PostgreSQL for scalable, production-grade installations.
+
+\section{Problem Statement}
+
+Executing jobs across distributed machines presents significant challenges:
+
+\begin{itemize}
+    \item \textbf{Lack of coordination and visibility:} Running jobs on multiple machines requires manual configuration and synchronization with no centralized platform for job distribution, results aggregation, or progress monitoring. Resource utilization remains inefficient as workers sit idle or become overloaded without intelligent scheduling.
+    \item \textbf{Inadequate isolation and monitoring:} Running concurrent jobs without proper isolation can lead to interference and unreliable results. Traditional tools like \texttt{top} and \texttt{ps} provide only coarse-grained metrics, missing the fine-grained kernel-level data needed for accurate resource analysis.
+\end{itemize}
+
+The Distributed Job Scheduler addresses these problems through automated job distribution, load-aware scheduling, cgroup-based isolation, and eBPF-based kernel-level monitoring.
+
+\section{Objectives}
+
+The primary objectives of this project are:
+
+\begin{enumerate}
+    \item Design and implement a centralized gRPC-based scheduler and a cli for interacting with it.
+    \item Develop worker nodes that execute jobs in isolated environments and integrate eBPF-based monitoring.
+\end{enumerate}
+
+\section{Scope and Limitations}
+
+\subsection{Scope}
+
+The scope of this project encompasses:
+
+\begin{itemize}
+    \item \textbf{Job types:} The system currently includes four built-in workload types: CPU stress, memory stress, I/O stress, and mixed loads, with an extensible executor architecture (via the \texttt{JobExecutor} interface) that allows adding new job types without modifying existing code.
+    \item \textbf{Platform:} The system targets Linux-based worker nodes with kernel support for eBPF (kernel $\geq$ 4.18) and cgroups v2.
+    \item \textbf{Monitoring:} eBPF monitoring tracks system call frequency (read, write, openat), I/O byte counts, network byte counts, CPU usage time, and memory usage at the cgroup level.
+    \item \textbf{Scheduling:} Three scheduling algorithms are implemented and selectable at startup: FCFS, SJF, and Adaptive.
+    \item \textbf{Authentication:} Bearer token-based authentication is enforced on all gRPC RPCs, with token generation, listing, and revocation supported by the Admin tool.
+    \item \textbf{CLI client:} Supports job submission, job listing with local caching, and job result retrieval, with a \texttt{--refresh} flag to bypass the cache and fetch fresh data from the scheduler.
+    \item \textbf{Database:} Both SQLite and PostgreSQL backends are supported for the scheduler database.
+\end{itemize}
+
+\subsection{Limitations}
+
+The project has the following limitations:
+
+\begin{itemize}
+    \item \textbf{Linux-only:} The system relies on Linux-specific features (eBPF, cgroups v2, \texttt{/proc} filesystem) and cannot run on other operating systems.
+    \item \textbf{No automatic worker discovery:} Workers must be manually configured with the scheduler's address; there is no service discovery mechanism.
+    \item \textbf{No job dependencies:} The system does not support job dependency graphs or directed acyclic graph (DAG) scheduling.
+    \item \textbf{Web interface:} The experimental web dashboard currently connects only to the PostgreSQL backend and provides read-only views of jobs, workers, and metrics; it does not support job submission or other write operations.
+    \item \textbf{Single scheduler:} The scheduler is a single point of contact; there is no scheduler replication or high-availability mode.
+    \item \textbf{Workload scope:} The built-in executor types are currently limited to stress-test workloads; however, the executor architecture is extensible through the \texttt{JobExecutor} interface and supports arbitrary job types without modifying existing components.
+\end{itemize}
+
+\section{Development Methodology}
+
+The project was developed using an iterative and incremental methodology. The development process was divided into the following phases:
+
+\begin{enumerate}
+    \item \textbf{Requirements Analysis:} Identification of functional and non-functional requirements through study of existing distributed scheduling systems and job execution models.
+    \item \textbf{Design:} Architectural design using object-oriented principles, including identification of classes, interfaces, and design patterns (Strategy, Factory, Observer).
+    \item \textbf{Implementation:} Iterative development of components in the order: shared library $\rightarrow$ scheduler $\rightarrow$ worker $\rightarrow$ executors $\rightarrow$ eBPF monitor $\rightarrow$ CLI $\rightarrow$ admin tool.
+    \item \textbf{Integration and Testing:} Integration of all components and manual end-to-end testing of the complete job lifecycle.
+    \item \textbf{Documentation:} Preparation of project documentation and this report.
+\end{enumerate}
+
+\section{Report Organization}
+
+The remainder of this report is organized as follows:
+
+\begin{description}
+    \item[Chapter 2: Background Study and Literature Review] presents the theoretical foundations of distributed systems, gRPC, eBPF, and cgroups, along with a review of related work in job scheduling and orchestration.
+    \item[Chapter 3: System Analysis] details the functional and non-functional requirements, feasibility analysis, and object-oriented analysis of the system using UML diagrams.
+    \item[Chapter 4: System Design] presents the refined object-oriented design, component architecture, deployment architecture, detailed algorithm descriptions, and analysis of scheduling algorithms.
+    \item[Chapter 5: Implementation and Testing] describes the tools and technologies used, implementation details of each module, and the testing approach with sample test cases.
+    \item[Chapter 6: Conclusion and Future Recommendations] summarizes the project outcomes and suggests directions for future enhancement.
+\end{description}

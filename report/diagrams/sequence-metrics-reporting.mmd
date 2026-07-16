@@ -1,0 +1,43 @@
+---
+title: Metrics Reporting Sequence
+---
+sequenceDiagram
+    participant Worker
+    participant Collector as MetricsCollector
+    participant EbpfMon as EbpfMonitor
+    participant Store as EbpfMetricStore
+    participant Scheduler
+    participant DB as SchedulerDB
+
+    Note over Worker,Scheduler: Every 2 seconds
+
+    Worker->>Collector: collect()
+    activate Collector
+    Collector->>Collector: read /proc/stat (CPU)
+    Collector->>Collector: read /proc/meminfo (memory)
+    Collector->>Collector: read /proc/net/dev (network)
+    Collector-->>Worker: WorkerMetricsData
+    deactivate Collector
+
+    Worker->>Scheduler: ReportWorkerMetrics(worker_id, cpu_%, memory_%, ...)
+    activate Scheduler
+    Scheduler->>DB: save_worker_metrics()
+    Scheduler-->>Worker: accepted
+    deactivate Scheduler
+
+    EbpfMon->>EbpfMon: poll() → read BPF maps + cgroup files
+    EbpfMon->>Store: add_snapshot(job_id, metrics)
+    activate Store
+    Store->>Store: store under lock
+    deactivate Store
+
+    Worker->>Store: drain(job_id)
+    activate Store
+    Store-->>Worker: buffered snapshots
+    deactivate Store
+
+    Worker->>Scheduler: ReportJobEbpfMetrics(worker_id, batch of snapshots)
+    activate Scheduler
+    Scheduler->>DB: save_ebpf_metrics()
+    Scheduler-->>Worker: accepted
+    deactivate Scheduler

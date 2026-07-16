@@ -6,18 +6,24 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 class SchedulerClient {
   private:
     std::unique_ptr<djs::SchedulerService::Stub> stub;
     CliDatabase db;
     std::string token_;
+    int cached_client_id_;
 
     void add_auth(grpc::ClientContext& context);
+    int get_client_id();
+    void print_job_result(const CachedJobResultEntry& r, bool from_cache);
 
   public:
     explicit SchedulerClient(std::shared_ptr<grpc::Channel> channel);
 
     void RegisterClient(const std::string& hostname, const std::string& token);
     void SubmitJob(const std::string& job_type, const std::map<std::string, std::string>& params);
+    void ListMyJobs(bool refresh = false);
+    void GetJobResult(int job_id, bool refresh = false);
 };

@@ -1,0 +1,45 @@
+\chapter{Conclusion and Future Recommendations}
+
+\section{Conclusion}
+
+The Distributed Job Scheduler project successfully delivers a comprehensive platform for automating job execution across distributed worker nodes. The system addresses the key challenges of manual job coordination by providing centralized orchestration, intelligent scheduling, isolated execution environments, and kernel-level monitoring.
+
+The specific achievements of the project are:
+
+\begin{enumerate}
+	\item \textbf{Centralized Job Management:} The gRPC-based scheduler provides a single point for job submission, status tracking, and result collection. The service definition, comprising 12 RPC methods, covers the complete job lifecycle from registration through execution to analytics.
+
+	\item \textbf{Intelligent Scheduling:} The Strategy pattern-based scheduling architecture supports three distinct algorithms: FCFS for fairness, SJF for throughput optimization, and Adaptive for capacity-aware assignment. The Adaptive algorithm's prediction model, which combines current worker metrics with historical job spikes, demonstrates effective load-aware scheduling.
+
+	\item \textbf{Isolated Job Execution:} Each job executes in a dedicated cgroup v2 environment, ensuring resource isolation and preventing interference between concurrent workloads. The fork/exec model provides process-level isolation, and per-job cgroup accounting enables accurate resource tracking independent of process lifecycle.
+
+	\item \textbf{Kernel-Level Monitoring:} The custom eBPF program, attached to the \url{raw_syscalls/sys_enter} tracepoint, provides real-time monitoring of system call activity, I/O operations, and network transfers at the kernel level. This represents a significant improvement over traditional process-level monitoring in terms of granularity and accuracy.
+
+	\item \textbf{Extensible Architecture:} The use of design patterns (Strategy for selectors and executors, Factory for registries, and Interface Segregation for database access) creates a system that is easily extensible. New job types and scheduling strategies can be added without modifying existing code.
+
+	\item \textbf{Dual Database Support:} Both SQLite and PostgreSQL backends are fully implemented, providing flexibility for different deployment scenarios while maintaining a consistent interface.
+\end{enumerate}
+
+The project demonstrates effective integration of modern C++ with cutting-edge Linux kernel technologies, creating a robust and practical tool for distributed job execution. The system is functional, with all components successfully communicating and operating together to deliver the complete job scheduling workflow.
+
+\section{Future Recommendations}
+
+While the project achieves its core objectives, several areas offer opportunities for enhancement:
+
+\begin{enumerate}
+	\item \textbf{Web-Based User Interface:} Developing a web dashboard would significantly improve system usability. A web UI could provide real-time visualization of job status, worker utilization, and metrics through interactive charts and tables. Technologies such as React or Vue.js for the frontend, with a RESTful or WebSocket backend, could be integrated with the existing gRPC infrastructure.
+
+	\item \textbf{Job Dependency Support:} Many real-world testing scenarios require coordinated execution of multiple jobs with dependencies (e.g., Job B must run after Job A completes successfully). Implementing DAG (Directed Acyclic Graph) support would enable complex multi-job workflows.
+
+	\item \textbf{Automatic Worker Discovery:} Adding a service discovery mechanism (e.g., using etcd or Consul) would allow workers to automatically find the scheduler without manual configuration. This would simplify deployment and support dynamic scaling.
+
+	\item \textbf{Scheduler High Availability:} The current single-scheduler architecture represents a single point of failure. Implementing scheduler replication with leader election (e.g., using Raft consensus) would improve system reliability.
+
+	\item \textbf{Container-Based Deployment:} Packaging the scheduler and worker as Docker containers would simplify deployment across different environments. Kubernetes could then be used for container orchestration, creating a meta-orchestration system where the Distributed Job Scheduler runs inside a Kubernetes cluster.
+
+	\item \textbf{Job Templates and Reusability:} Allowing users to define reusable job templates with parameterized configurations would improve productivity and enable standardized test suites.
+
+	\item \textbf{ML-Driven Scheduling:} Train a compact and lightweight machine learning model from the historical job and worker data acquired by the system. When deployed on the scheduler as a scheduling algorithm, such a model can make faster and more accurate scheduling decisions by learning from past execution patterns, worker performance profiles, and resource utilization trends, going beyond the heuristic-based approach of the current FCFS, SJF, and Adaptive selectors.
+\end{enumerate}
+
+In conclusion, the Distributed Job Scheduler provides a solid foundation for distributed job orchestration. With the suggested enhancements, it has the potential to evolve into a comprehensive platform for workload management and distributed computing in heterogeneous environments.

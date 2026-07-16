@@ -21,6 +21,17 @@ class PgSchedulerDatabase : public ISchedulerDatabase {
     int insert_job(const std::string& job_type, const std::string& params, int client_id);
     Job get_job_by_id(int job_id);
     std::vector<Job> get_jobs_by_status(const std::string& status);
+    std::vector<Job> get_jobs_by_client_id(int client_id);
+
+    struct JobResultInfo {
+        int job_id;
+        std::string status;
+        bool success;
+        std::string message;
+        std::string artifact_url;
+        std::string completed_at;
+    };
+    JobResultInfo get_job_result(int job_id);
 
     Worker get_worker_by_id(int worker_id);
     int insert_worker(const Worker& worker);

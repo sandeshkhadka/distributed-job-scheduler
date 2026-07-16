@@ -1,0 +1,77 @@
+---
+title: "Refined Class Diagram: Scheduler Side"
+---
+classDiagram
+    class SchedulerServiceImpl {
+        -SchedulerDb db_
+        +unique_ptr~JobSelector~ job_selector_
+        +SubmitJob(SubmitJobRequest, SubmitJobReply)
+        +GetJob(GetJobRequest, GetJobResponse)
+        +RegisterWorker(RegisterWorkerRequest, RegisterWorkerReply)
+        +RegisterClient(RegisterClientRequest, RegisterClientResponse)
+        +ReportJobResult(ReportJobResultRequest, ReportJobResultReply)
+        +ReportWorkerMetrics(WorkerMetrics, ReportWorkerMetricsResponse)
+        +ReportJobEbpfMetrics(ReportJobEbpfMetricsRequest, ReportJobEbpfMetricsResponse)
+        +ConfirmJobReceived(ConfirmJobReceivedRequest, ConfirmJobReceivedResponse)
+        +ReportJobStarted(ReportJobStartedRequest, ReportJobStartedResponse)
+        +GetJobTimeseries(GetJobTimeseriesRequest, GetJobTimeseriesResponse)
+        +GetJobStatus(GetJobStatusRequest, GetJobStatusReply)
+    }
+
+    class JobSelector {
+        <<abstract>>
+        +string name()$
+        +Job select_job(const Worker&, const vector~Job~&, ISchedulerDatabase&)$
+    }
+
+    class FCFSSelector {
+        +Job select_job() override
+    }
+
+    class SJFSelector {
+        +Job select_job() override
+    }
+
+    class AdaptiveSelector {
+        +Job select_job() override
+    }
+
+    class ISchedulerDatabase {
+        <<interface>>
+        +bool is_token_valid(token, token_type)$
+        +optional~WorkerMetricsBrief~ get_worker_latest_metrics(worker_id)$
+        +map~string,double~ get_avg_durations()$
+        +map~string,JobTypeSpikes~ get_avg_spikes()$
+    }
+
+    class SchedulerDatabase {
+        -SQLiteDB db_
+        +SchedulerDatabase()
+        +int insert_job(job_type, params, client_id)
+        +int register_worker(cpu_cores, mem_size, ...)
+        +void insert_worker_job(worker_id, job_id)
+        +void save_worker_metrics(worker_id, metrics)
+        +void save_job_result(job_id, result)
+        +void save_job_analytics(job_id, type, duration, spikes)
+        +void save_ebpf_metrics(job_id, worker_id, metrics)
+        +bool is_token_valid(token, token_type) override
+        +optional~WorkerMetricsBrief~ get_worker_latest_metrics(worker_id) override
+        +map~string,double~ get_avg_durations() override
+        +map~string,JobTypeSpikes~ get_avg_spikes() override
+    }
+
+    class Database {
+        +Database(db_name)
+        +int insert_job(job_type, params, client_id)
+        +Job get_job_by_id(job_id)
+        +vector~Job~ get_jobs_by_status(status)
+    }
+
+    SchedulerServiceImpl *--> SchedulerDatabase : owns
+    SchedulerServiceImpl *--> JobSelector : owns
+    SchedulerDatabase ..|> ISchedulerDatabase
+    SchedulerDatabase --|> Database
+    JobSelector <|-- FCFSSelector
+    JobSelector <|-- SJFSelector
+    JobSelector <|-- AdaptiveSelector
+    JobSelector ..> ISchedulerDatabase : uses

@@ -1,0 +1,31 @@
+Report Format Standards: 
+
+A. Page Number 
+The pages from certificate page to the list of
+tables/figures/abbreviations/approvals should be numbered in roman starting from
+i. The pages from chapter 1 onwards should be numbered in numeric starting from
+1. The page number should be inserted at bottom, aligned center. 
+
+B. Page Size and Margin   
+The paper size must be a page size corresponding to A4. The margins must be set
+as    
+ Top = 1 in (2.54 cm) 
+ Bottom = 1 in (2.54 cm) 
+ Left = 1.25 in (3.17 cm) 
+ Right = 1 in (2.54 cm)  
+
+C. Paragraph Style 
+ All paragraphs must be justified and have spacing of 1.5. 
+
+D. Text Font of Document 
+ The contents in the document should be in Times New Roman font 
+ The font size in the paragraphs of document should be 12 
+
+E. Section Headings 
+ Font size for the headings should be 16 for chapter headings, 14 for section
+headings, 12 for sub-section headings. All the headings should be bold faced. 
+
+F.  Figures and Tables  
+ Position of figures and tables should be aligned center. The figure caption
+should be centred below the figure and table captions should be centred above
+the table. All the captions should be of bold face with 12 font size. 

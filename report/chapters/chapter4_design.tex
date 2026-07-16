@@ -1,0 +1,245 @@
+\chapter{System Design}
+
+\section{Design}
+
+This chapter presents the detailed design of the Distributed Job Scheduler system. Following the object-oriented approach established in the analysis chapter, it covers the refined class design, component architecture, deployment architecture, algorithm details, and database design.
+
+\subsection{Refined Class Diagrams}
+
+The refined class diagrams (Figures~\ref{fig:class-design}, \ref{fig:class-design-worker}, and \ref{fig:class-design-executor-ebpf}) provide detailed attributes, method signatures, and relationships for the core classes identified during analysis.
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/class-design.png}
+	\caption{Refined class diagram: Scheduler-side classes and relationships}
+	\label{fig:class-design}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/class-design-worker.png}
+	\caption{Refined class diagram: Worker-side classes and relationships}
+	\label{fig:class-design-worker}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/class-design-executor-ebpf.png}
+	\caption{Refined class diagram: Executor and eBPF monitoring classes}
+	\label{fig:class-design-executor-ebpf}
+\end{figure}
+
+\subsubsection{Scheduler-Side Classes}
+
+\begin{description}
+	\item[SchedulerServiceImpl:] Implements the \url{djs::SchedulerService::Service} gRPC interface. Contains a \texttt{SchedulerDb} (typedef resolving to either \url{SchedulerDatabase} or \url{PgSchedulerDatabase}) and a \texttt{std::unique\_ptr<JobSelector>} for the strategy. Key methods include \texttt{SubmitJob}, \texttt{GetJob}, \texttt{RegisterWorker}, and \texttt{ReportJobResult}.
+
+	\item[JobSelector (abstract):] Declares the pure virtual method \texttt{select\_job(const Worker\&, const std::vector<Job>\&, ISchedulerDatabase\&)} and the \texttt{name()} accessor. Three concrete implementations exist:
+		\begin{itemize}
+			\item \textbf{FCFSSelector:} Selects the job with the earliest \url{created_at} timestamp.
+			\item \textbf{SJFSelector:} Selects the job type with the shortest historical average duration, falling back to FCFS.
+			\item \textbf{AdaptiveSelector:} Predicts resource impact using historical spikes and selects the oldest safe job.
+		\end{itemize}
+
+	\item[JobSelectorRegistry:] Implements the Factory pattern. Maintains a map of string names to factory function pointers. The \texttt{create(name)} method instantiates the appropriate selector. Registered names include \texttt{"fcfs"}, \texttt{"sjf"}, and \texttt{"adaptive"}.
+
+	\item[SchedulerDatabase:] Inherits from both \texttt{Database} (shared SQLite base) and \url{ISchedulerDatabase} (narrow strategy interface). Provides complete CRUD operations for jobs, workers, clients, tokens, metrics, and analytics.
+
+	\item[ISchedulerDatabase:] Pure virtual interface with methods: \url{is_token_valid}, \url{get_worker_latest_metrics}, \url{get_avg_durations}, \url{get_avg_spikes}. This narrow interface ensures that scheduling strategies access only the data they need.
+\end{description}
+
+\subsubsection{Worker-Side Classes}
+
+\begin{description}
+	\item[WorkerClient:] Wraps the gRPC \url{SchedulerService::Stub}. Manages the worker identity (cached in \texttt{WorkerDatabase}), authentication, and all RPC communication with the scheduler. Key methods: \texttt{Register}, \texttt{GetJob}, \url{confirm_job_received}, \url{report_job_started}, \url{report_job_result}, \url{report_worker_metrics}, \url{report_ebpf_metrics}.
+
+	\item[WorkerDatabase:] Inherits from \texttt{Database}. Stores the worker's registered ID, authentication token, pending job results, and active job records. Used for crash recovery on restart.
+
+	\item[JobOrchestrator:] Manages the complete lifecycle of job execution. Contains a map of active job handles, a monitoring thread for child process reaping, and per-job eBPF reader threads. Key methods: \url{execute(job_id, job_type, params)} creates cgroup, forks executor, and monitors execution. The \url{on_completed} callback (\texttt{std::function}) is invoked when a job finishes.
+
+	\item[JobExecutor (abstract):] Declares \texttt{execute(const std::map<std::string, std::string>\& params)} returning \texttt{JobResult}. Concrete implementations:
+		\begin{itemize}
+			\item \textbf{StressCpuExecutor:} Spawns N threads running CPU-intensive operations (sqrt, sin, cos).
+			\item \textbf{StressMemExecutor:} Allocates N MB of memory with memset and holds it for the specified duration.
+			\item \textbf{StressIOExecutor:} Performs file write/read operations on a temporary file.
+			\item \textbf{MixedLoadExecutor:} Concurrently runs CPU, memory, and I/O stress threads.
+		\end{itemize}
+
+	\item[MetricsCollector:] Reads \url{/proc/stat}, \url{/proc/meminfo}, \url{/proc/net/dev}, and \texttt{statvfs} to collect system-level metrics. Tracks deltas for CPU and network rates.
+
+	\item[EbpfMonitor:] Uses libbpf to load and attach a BPF program to the \url{raw_syscalls/sys_enter} tracepoint. Periodically reads per-CPU BPF maps and cgroup files to produce metric snapshots.
+
+	\item[EbpfMetricStore:] Thread-safe accumulator with mutex-guarded \url{add_snapshot} (called from eBPF reader threads) and \texttt{drain} (called from the main metrics reporting loop).
+\end{description}
+
+\subsection{Component Diagrams}
+
+The component diagram (Figure~\ref{fig:component-diagram}) illustrates the high-level software components and their dependencies.
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/component-diagram.png}
+	\caption{Component diagram showing system modules and their inter-dependencies}
+	\label{fig:component-diagram}
+\end{figure}
+
+The system is organized into the following components:
+
+\begin{description}
+	\item[Shared Library:] Contains the \texttt{Database} base class, \texttt{Logger}, and \url{argparse.hpp}. Linked by all other components.
+
+	\item[Scheduler Component:] Contains \url{SchedulerServiceImpl}, \url{SchedulerDatabase} (or \url{PgSchedulerDatabase}), \texttt{JobSelector} hierarchy, and \url{JobSelectorRegistry}. Exposes the gRPC service on port 50051.
+
+	\item[Worker Component:] Contains \url{WorkerClient}, \url{WorkerDatabase}, \url{JobOrchestrator}, \url{MetricsCollector}, and \url{EbpfMetricStore}. Depends on the \texttt{Executor Implementation} library and the \url{djs-ebpf-monitor} binary.
+
+	\item[Executor Implementation Library:] Static library containing all \texttt{JobExecutor} implementations. Linked by both the Worker and the standalone \url{djs-executor} binary.
+
+	\item[CLI Component:] Contains \url{SchedulerClient} (gRPC client wrapper), \texttt{CliDatabase}, and \texttt{CliParser}. Provides the \url{djs-cli} executable.
+
+	\item[Admin Component:] Contains \url{AdminDatabase} (or \url{PgAdminDatabase}). Provides token management functionality.
+
+	\item[Dashboard Component:] A Node.js/Express web application (\url{dashboard/}) that connects directly to the PostgreSQL database. Provides a browser-based interface for viewing job and worker status, including overview statistics, worker detail pages with active job history, job detail pages with eBPF metrics, and REST API endpoints for metrics data.
+
+	\item[eBPF Monitor:] Standalone binary (\url{djs-ebpf-monitor}) that loads the BPF object, attaches tracepoints, and outputs JSON metrics to stdout.
+
+	\item[djs-executor:] Minimal standalone binary that parses \texttt{--type} and \texttt{--param} arguments, creates the appropriate executor, and prints JSON results to stdout.
+
+	\item[Proto Library:] Contains the generated gRPC and Protobuf code from \url{scheduler.proto}.
+\end{description}
+
+\subsection{Deployment Diagrams}
+
+The deployment diagram (Figure~\ref{fig:deployment-diagram}) shows the physical deployment of components across nodes.
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/deployment-diagram.png}
+	\caption{Deployment diagram showing the distributed deployment architecture}
+	\label{fig:deployment-diagram}
+\end{figure}
+
+The system is deployed as follows:
+
+\begin{description}
+	\item[Scheduler Node:] Runs the \url{djs-sc} binary (scheduler). Connects to the database (SQLite file or PostgreSQL server). Listens on TCP port 50051 for incoming gRPC connections.
+
+	\item[Database Server:] Either a local SQLite file (\url{scheduler.db}) co-located with the scheduler, or a separate PostgreSQL server (optionally running in a Docker container).
+
+	\item[Worker Nodes:] Each worker runs the \url{djs-wk} binary, which connects to the scheduler via gRPC. Workers also have the \url{djs-executor} and \url{djs-ebpf-monitor} binaries available locally for job execution.
+
+	\item[Client Machines:] Run the \url{djs-cli} binary to submit jobs and query status. Multiple clients can connect to the scheduler simultaneously.
+
+	\item[Admin Machine:] Runs the \texttt{admin} binary for token management. Typically co-located with the scheduler for administrative convenience.
+
+	\item[Dashboard Server:] Runs the Node.js/Express dashboard application. Connects to the PostgreSQL database directly and serves a web UI on port 3000 for monitoring jobs, workers, and metrics.
+\end{description}
+
+\section{Algorithm Details}
+
+\subsection{First-Come-First-Serve (FCFS)}
+
+The FCFS algorithm (Figure~\ref{fig:fcfs-flowchart}) is the simplest scheduling strategy. It selects the oldest unassigned job from the queue.
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/fcfs-flowchart.png}
+	\caption{FCFS Scheduling Algorithm Flowchart}
+	\label{fig:fcfs-flowchart}
+\end{figure}
+
+FCFS serves as the baseline scheduling strategy in the project. It requires no historical data, no worker metrics, and no database queries beyond fetching the job queue: it simply selects the oldest unassigned job. This makes it the simplest and most predictable algorithm to understand and debug.
+
+The main benefit of FCFS is its simplicity: it has no dependencies on worker reporting or historical analytics, so it works from the moment the scheduler starts. However, this simplicity is also its main limitation. FCFS has no knowledge of job characteristics (duration, resource requirements) or worker capacity. A CPU-intensive job can be assigned to an already overloaded worker, and short jobs can be stuck behind long ones, reducing overall throughput. The scheduler assigns jobs blindly without knowing whether the worker can handle them.
+
+\subsection{Shortest-Job-First (SJF)}
+
+The SJF algorithm (Figure~\ref{fig:sjf-flowchart}) uses historical runtime data to predict job duration and selects the job type with the shortest expected execution time.
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/sjf-flowchart.png}
+	\caption{SJF Scheduling Algorithm Flowchart}
+	\label{fig:sjf-flowchart}
+\end{figure}
+
+The algorithm queries the \url{job_runtime_analytics} table to compute average durations per job type. For job types without historical records, it falls back to the FCFS strategy to ensure forward progress and bootstrap analytics data.
+
+SJF improves on FCFS by using historical runtime data to prioritize shorter jobs. The key benefit is higher throughput: by executing shorter jobs first, more jobs can complete per unit time compared to FCFS, which is especially beneficial when the queue contains a mix of short and long jobs. However, SJF still does not consider the worker's current resource utilization. A short but CPU-intensive job may still be assigned to an overloaded worker, potentially degrading performance for all jobs on that node. The duration-based heuristic is also an approximation at best, since actual runtime can vary significantly with system conditions.
+
+\subsection{Adaptive Scheduling}
+
+The Adaptive algorithm (Figure~\ref{fig:adaptive-flowchart}) considers both the worker's current resource utilization and the historical resource spikes of each job type to make informed scheduling decisions that avoid overloading workers.
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/adaptive-flowchart.png}
+	\caption{Adaptive Scheduling Algorithm Flowchart}
+	\label{fig:adaptive-flowchart}
+\end{figure}
+
+The Adaptive algorithm uses the following prediction model:
+
+\begin{itemize}
+	\item \textbf{Predicted CPU:} \texttt{current\_cpu + avg\_cpu\_spike}. If the result exceeds 100\%, the job risks CPU starvation.
+	\item \textbf{Predicted Memory:} \texttt{current\_memory + (avg\_memory\_spike\_pct * total\_memory / 100) + 200MB}. The 200 MB safety buffer accounts for measurement inaccuracies and transient allocations.
+\end{itemize}
+
+Jobs with historical spike data that are predicted to fit within the worker's capacity are classified as \texttt{safe\_known}. Jobs of unknown types are classified as \texttt{unknown} and are accepted only when no safe known jobs are available, ensuring that the system gathers analytics data for new job types while prioritizing safe assignments.
+
+Compared to FCFS and SJF, the Adaptive algorithm offers several key advantages. First, it is capacity-aware: it considers both the worker's current CPU and memory utilization and the historical resource spikes of each job type, rejecting assignments that would overload the worker. Second, its predictions improve over time as more jobs complete and spike data accumulates in the analytics tables. Third, it handles cold-start scenarios gracefully by accepting unknown job types for bootstrapping when no safe known jobs are available, ensuring the system can still make progress while gathering data.
+
+The main limitation is its dependence on worker metrics reporting: if a worker has not yet sent its first metrics snapshot, the algorithm cannot make predictions and returns no assignment (the worker continues polling until metrics arrive). Additionally, the prediction model is a heuristic that may not capture complex interactions between multiple concurrent jobs sharing the same worker.
+
+Among the three strategies, Adaptive is the most suitable for production use. It combines FCFS fairness (oldest-first among safe jobs) with data-driven capacity planning, making informed decisions that protect worker stability while maximizing throughput. This behavior is confirmed empirically in the testing section (test case \texttt{AdaptivePreventsOverloadWhileFCFSAndSJFDoNot} in Table~\ref{tab:unit_tests}): given a worker at 80\% CPU with a short CPU-heavy job and a longer I/O job, both FCFS and SJF select the CPU job and would overload the worker to 110\%, while Adaptive correctly rejects it and selects the safe I/O job. FCFS is best suited as a simple fallback or for debugging when no historical data or metrics are available. SJF provides a middle ground when runtime data exists but capacity awareness is not required. Adaptive is the recommended default because it alone accounts for the worker's actual state when making scheduling decisions.
+
+\section{Database Design}
+
+This section presents the database design for the scheduler backend. The database serves as the persistent store for all system data including job definitions, worker registrations, metrics, and analytics.
+
+The project initially used SQLite as the sole database backend. SQLite requires no separate server, background processes, or configuration: the entire database is a single file, making it ideal for rapid prototyping. Setting up PostgreSQL, in contrast, involves installing and configuring a dedicated database server with its own background processes, user management, and network setup.
+
+As the project grew and components such as the eBPF monitor, multiple executor instances, and concurrent worker processes were added, the database needed to handle simultaneous access from several independent programs. SQLite's file-level locking model allows only one writer at a time, making concurrent multi-process access impractical without contention. PostgreSQL was adopted to address this limitation: its client-server architecture supports multiple simultaneous connections, enabling the scheduler, admin tool, monitor, and workers to access the database concurrently without conflicts. PostgreSQL also offers better scalability for the growing volume of eBPF metrics data.
+
+SQLite remains available as a lightweight backend for smaller deployments, development, and testing scenarios where simplicity outweighs the need for concurrent access. This dual-backend approach ensures backward compatibility with existing SQLite-based installations while providing a migration path to PostgreSQL for larger deployments.
+
+\begin{figure}[htbp]
+	\centering
+	\figimg{figures/er-diagram.png}
+	\caption{Entity-Relationship diagram showing the database schema}
+	\label{fig:er-diagram}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth, height=0.6\textheight, keepaspectratio]{er_diagram_from_sqlite.jpg}
+	\caption{Actual database schema visualized from the SQLite backend}
+	\label{fig:er-sqlite}
+\end{figure}
+
+\subsection{Relational Schema}
+
+The database consists of the following tables:
+
+\begin{description}
+	\item[\texttt{clients}:] Stores registered client information.
+
+	\item[\url{workers}:] Stores registered worker node specifications.
+
+	\item[\texttt{jobs}:] Central table storing job definitions.
+
+	\item[\url{job_worker}:] Join table for the many-to-many relationship between jobs and workers.
+
+	\item[\texttt{job\_results}:] Stores job completion results.
+
+	\item[\texttt{auth\_tokens}:] Stores authentication tokens.
+
+	\item[\url{client_token_usage}:] Tracks which tokens are used by which clients.
+
+	\item[\url{worker_metrics}:] Latest metrics snapshot per worker (1:1 relationship).
+
+	\item[\url{job_runtime_snapshots}:] Per-job start and peak resource metrics (1:1 relationship).
+
+	\item[\url{job_runtime_analytics}:] Historical runtime analytics records.
+
+	\item[\url{job_ebpf_metrics}:] Fine-grained eBPF metrics data points.
+\end{description}

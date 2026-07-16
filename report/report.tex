@@ -1,0 +1,188 @@
+\documentclass[12pt,a4paper]{report}
+
+% ------------------------------------------------------------
+% FONT: Times New Roman (requires XeLaTeX)
+% ------------------------------------------------------------
+\usepackage{fontspec}
+\setmainfont{Times New Roman}
+
+% ------------------------------------------------------------
+% PAGE GEOMETRY
+% ------------------------------------------------------------
+\usepackage[top=1in, bottom=1in, left=1.25in, right=1in]{geometry}
+
+% ------------------------------------------------------------
+% LINE SPACING (1.5)
+% ------------------------------------------------------------
+\usepackage{setspace}
+\onehalfspacing
+
+% ------------------------------------------------------------
+% HEADINGS: 16pt chapter, 14pt section, 12pt subsection
+% ------------------------------------------------------------
+\usepackage{titlesec}
+\titleformat{\chapter}[hang]{\normalfont\bfseries\fontsize{16}{19.2}\selectfont}{Chapter \thechapter:}{1em}{}
+\titleformat{\section}[hang]{\normalfont\bfseries\fontsize{14}{16.8}\selectfont}{\thesection}{1em}{}
+\titleformat{\subsection}[hang]{\normalfont\bfseries\fontsize{12}{14.4}\selectfont}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}[hang]{\normalfont\bfseries\fontsize{12}{14.4}\selectfont}{\thesubsubsection}{1em}{}
+\titlespacing{\chapter}{0pt}{0pt}{12pt}
+\titlespacing{\section}{0pt}{12pt}{6pt}
+\titlespacing{\subsection}{0pt}{6pt}{6pt}
+
+% ------------------------------------------------------------
+% PAGE NUMBERING (footer, centered)
+% ------------------------------------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+% ------------------------------------------------------------
+% CAPTIONS: bold, 12pt, centered
+% ------------------------------------------------------------
+\usepackage[font={bf,normal},labelsep=space]{caption}
+\captionsetup[figure]{position=below}
+\captionsetup[table]{position=above}
+
+% ------------------------------------------------------------
+% TABLES
+% ------------------------------------------------------------
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+
+% ------------------------------------------------------------
+% GRAPHICS & PLACEHOLDER COMMAND
+% ------------------------------------------------------------
+\usepackage{graphicx}
+\graphicspath{{figures/}{figures/djs_outputs/}}
+
+\newcommand{\figimg}[1]{\includegraphics[width=\textwidth, height=0.75\textheight, keepaspectratio]{#1}}
+
+\newcommand{\placeholderfig}[2]{%
+  \begin{figure}[htbp]
+    \centering
+    \fbox{%
+      \begin{minipage}{0.9\textwidth}
+        \centering\vspace{2cm}
+        \textbf{\detokenize{#1}}\\
+        \textit{(Placeholder --- insert actual diagram)}
+        \vspace{2cm}
+      \end{minipage}%
+    }
+    \caption{#2}
+    \label{fig:#1}
+  \end{figure}
+}
+
+% ------------------------------------------------------------
+% HYPERLINKS
+% ------------------------------------------------------------
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=blue,citecolor=black]{hyperref}
+\urlstyle{tt}
+
+% ------------------------------------------------------------
+% SOURCE CODE LISTINGS
+% ------------------------------------------------------------
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  tabsize=2,
+  showstringspaces=false,
+  language=C++,
+  commentstyle=\itshape\color{gray},
+  keywordstyle=\bfseries\color{blue},
+  stringstyle=\color{red},
+}
+
+% ------------------------------------------------------------
+% TABLE OF CONTENTS
+% ------------------------------------------------------------
+\usepackage{tocloft}
+\renewcommand{\cftchapfont}{\bfseries}
+\renewcommand{\cftsecfont}{\normalfont}
+\renewcommand{\cftsubsecfont}{\normalfont}
+
+% ------------------------------------------------------------
+% APPENDIX
+% ------------------------------------------------------------
+\usepackage[titletoc]{appendix}
+
+% ------------------------------------------------------------
+% ENUMERATE / ITEMIZE
+% ------------------------------------------------------------
+\usepackage{enumitem}
+\setlist{nosep}
+
+% ------------------------------------------------------------
+% MISCELLANEOUS
+% ------------------------------------------------------------
+\usepackage{xcolor}
+\usepackage[section]{placeins}
+
+% ------------------------------------------------------------
+% DOCUMENT START
+% ------------------------------------------------------------
+
+\begin{document}
+
+% ---- FRONT MATTER: roman numerals ----
+\pagenumbering{roman}
+
+% Cover (no page number shown)
+\include{chapters/cover}
+
+% for front page
+\include{chapters/cover}
+
+\setcounter{page}{1}
+
+% Certificate
+\include{chapters/certificate}
+
+% Acknowledgement
+\include{chapters/acknowledgement}
+
+% Abstract
+\include{chapters/abstract}
+
+% Table of Contents
+\renewcommand{\contentsname}{Table of Contents}
+\tableofcontents
+\clearpage
+
+% List of Abbreviations
+\include{chapters/abbreviations}
+
+% List of Figures
+\addcontentsline{toc}{chapter}{List of Figures}
+\listoffigures
+\clearpage
+
+% List of Tables
+\addcontentsline{toc}{chapter}{List of Tables}
+\listoftables
+\clearpage
+
+% ---- BODY: arabic numerals ----
+\pagenumbering{arabic}
+
+\include{chapters/chapter1_introduction}
+\include{chapters/chapter2_background}
+\include{chapters/chapter3_analysis}
+\include{chapters/chapter4_design}
+\include{chapters/chapter5_implementation}
+\include{chapters/chapter6_conclusion}
+
+% ---- REFERENCES ----
+\include{chapters/references}
+
+% ---- APPENDIX ----
+\include{chapters/appendix}
+
+\end{document}

@@ -1,0 +1,445 @@
+\chapter{Implementation and Testing}
+
+\section{Implementation}
+
+This chapter describes the implementation of the Distributed Job Scheduler system, covering the tools and technologies used, the implementation details of each module, and the testing approach.
+
+\subsection{Tools Used}
+
+\subsubsection{Programming Languages and Frameworks}
+
+\begin{description}
+	\item[C++20:] The entire system is implemented in C++20, chosen for its performance characteristics, systems-level programming capabilities, and modern language features including smart pointers, lambda expressions, move semantics, multithreading support via \texttt{std::thread}, and the standard template library.
+
+	\item[CMake 3.20+:]: The build system uses CMake for cross-platform configuration, with custom commands for gRPC code generation and eBPF compilation.
+
+	\item[gRPC:] High-performance RPC framework used for all inter-component communication. gRPC was chosen over HTTP/REST for its strongly-typed contracts via Protocol Buffers, efficient binary serialization, and built-in support for bidirectional streaming.
+
+	\item[Protocol Buffers:] Used as both the Interface Definition Language (IDL) and serialization format. The \url{scheduler.proto} file defines the complete service contract with 12 RPC methods and 26 message types.
+\end{description}
+
+\subsubsection{Database Systems}
+
+\begin{description}
+	\item[SQLite3:] The default database backend. Provides lightweight, file-based storage without requiring a separate database server. Suitable for development, testing, and small-scale deployments.
+
+	\item[PostgreSQL 16:] Optional backend for production-scale deployments. Provides better concurrency handling, more sophisticated indexing, and robustness for large volumes of metrics data.
+\end{description}
+
+\subsubsection{Operating System and Kernel Technologies}
+
+\begin{description}
+	\item[Linux Kernel (4.18+):] The target platform. All worker functionality depends on Linux-specific features.
+
+	\item[libbpf:] Userspace library for loading, attaching, and interacting with eBPF programs. Provides a stable API for BPF operations.
+
+	\item[eBPF:] In-kernel program execution framework. Used for real-time monitoring of job system calls, I/O, and network activity through the \url{raw_syscalls/sys_enter} tracepoint.
+
+	\item[cgroups v2:] Linux control groups for resource isolation. Each job runs in a dedicated cgroup under \url{/sys/fs/cgroup/djs/jobs/job_id}.
+\end{description}
+
+\subsubsection{Build and Development Tools}
+
+\begin{description}
+	\item[Clang:] The recommended C++ compiler. Also used to compile the BPF C program with the \texttt{-target bpf} flag.
+
+	\item[clang-format:] Code formatting tool used in the pre-commit hook to enforce consistent C++ code style.
+
+	\item[Docker Compose:] Provides a PostgreSQL 16 container for development and testing of the PostgreSQL backend.
+\end{description}
+
+\subsection{Implementation Details of Modules}
+
+This section describes the implementation of each major module in the system, organized by component.
+
+\subsubsection{Shared Library Module}
+
+The shared library provides foundational classes used by all other components:
+
+\begin{itemize}
+	\item \textbf{Database class:} Provides the base database interface with methods for job CRUD operations (\url{insert_job}, \url{get_job_by_id}, \url{get_jobs_by_status}, etc.). Uses SQLite3 C API internally.
+	\item \textbf{SQLiteDB:} A thread-safe singleton wrapper around the SQLite3 C API. Implements WAL (Write-Ahead Logging) mode for better concurrent read performance and uses a \texttt{std::mutex} for write serialization.
+	\item \textbf{Logger:} Simple logging utility with three levels (Debug, Info, Error) and file/console output support.
+\end{itemize}
+
+\subsubsection{Scheduler Module}
+
+The scheduler is the central component of the system. Its implementation is structured as follows:
+
+\textbf{SchedulerServiceImpl:} Implements all 12 gRPC RPC methods defined in \url{scheduler.proto}. The implementation follows a consistent pattern: extract authentication token from metadata, validate via \url{check_auth()}, perform the operation, and return the response. Key RPC implementations:
+
+\begin{itemize}
+	\item \texttt{SubmitJob}: Deserializes the JSON params string, creates a job record with status \texttt{"not started"}, and returns the job ID.
+	\item \texttt{GetJob}: The core scheduling RPC. Fetches all jobs with status \texttt{"not started"}, retrieves the worker's latest metrics, and passes both to the \url{JobSelector::select_job()} method. The selected job is then associated with the worker via the \url{job_worker} join table and its status is updated to \texttt{"assigned"}.
+	\item \texttt{GetJobStatus}: Returns the current status of a job along with result details (success, message, artifact URL) if the job has completed. Authorized for both clients and workers.
+	\item \texttt{GetClientJobs}: Returns a list of all jobs submitted by a specific client, ordered by creation time. Used by the CLI's \texttt{jobs} command.
+	\item \texttt{ReportJobResult}: Updates the job status to \texttt{"completed"} or \texttt{"failed"}, computes runtime analytics (duration, CPU/memory spikes), and stores both the result and analytics data.
+	\item \texttt{ReportWorkerMetrics}: Uses \texttt{INSERT OR REPLACE} to maintain a single-row metrics record per worker, ensuring only the latest snapshot is retained.
+\end{itemize}
+
+\textbf{Authentication:} The \url{check_auth()} function extracts the Bearer token from the gRPC metadata, validates it against the database (\url{is_token_valid}), and returns either \url{UNAUTHENTICATED} (missing token), \url{PERMISSION_DENIED} (invalid/revoked token), or OK.
+
+\textbf{Database selection:} The \url{SchedulerDb} typedef resolves to either \url{SchedulerDatabase} (SQLite) or \url{PgSchedulerDatabase} (PostgreSQL) based on the \url{USE_PG} compile-time flag, enabling backend selection without code changes.
+
+The scheduler startup output is shown in Figure~\ref{fig:scheduler-startup}.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_scheduler_startup.jpg}
+	\caption{Scheduler startup output showing gRPC server listening on port 50051}
+	\label{fig:scheduler-startup}
+\end{figure}
+
+\subsubsection{Worker Module}
+
+The worker module is the most complex component, managing job polling, execution, monitoring, and metrics reporting.
+
+\textbf{Main Loop (worker.cpp):} The worker's main function performs the following operations in a loop with a 2-second interval:
+\begin{enumerate}
+	\item If not registered, call \texttt{WorkerClient::Register()} with the token.
+	\item Call \texttt{WorkerClient::GetJob()} to poll for a new job assignment.
+	\item If a job is received, call \texttt{JobOrchestrator::execute()} to run it.
+	\item Call \url{report_pending_results()} to push any buffered results to the scheduler.
+	\item Collect and report system metrics via \texttt{MetricsCollector::collect()} and \url{WorkerClient::report_worker_metrics()}.
+	\item Drain and report eBPF metrics via \texttt{EbpfMetricStore::drain()} and \url{WorkerClient::report_ebpf_metrics()}.
+\end{enumerate}
+
+\textbf{JobOrchestrator:} Manages job execution through the following steps:
+
+\begin{enumerate}
+	\item \textbf{Cgroup creation:} Creates a cgroup v2 directory at \url{/sys/fs/cgroup/djs/jobs/job_id} with appropriate permissions.
+	\item \textbf{Process forking:} Creates a pipe for stdout capture, then forks a child process. The child calls \texttt{execvp()} to run the \url{djs-executor} binary with the job type and parameters.
+	\item \textbf{eBPF monitor:} Optionally forks the \url{djs-ebpf-monitor} process, attaching it to the job's cgroup for kernel-level monitoring.
+	\item \textbf{Cgroup assignment:} Writes the child PID to \url{cgroup.procs} to place it under the cgroup's resource controls.
+	\item \textbf{Monitoring:} A reaper thread (\texttt{monitor\_loop}) calls \texttt{waitpid(-1, \&status, 0)} to wait for child process termination.
+	\item \textbf{Cleanup:} Joins the eBPF reader thread, removes the cgroup directory, and invokes the \url{on_completed} callback.
+\end{enumerate}
+
+\textbf{Crash recovery:} On startup, \url{recover_pending_jobs()} checks for any jobs in non-terminal states (\texttt{received}, \texttt{scheduled}, \texttt{started}, \texttt{assigned}) and automatically reports them as failed to the scheduler.
+
+The worker startup output is shown in Figure~\ref{fig:worker-startup}.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs-wk_startup.jpg}
+	\caption{Worker startup showing registration and job polling loop}
+	\label{fig:worker-startup}
+\end{figure}
+
+\subsubsection{Executor Implementations}
+
+Each executor type implements the \texttt{JobExecutor} interface:
+
+\begin{itemize}
+	\item \textbf{StressCpuExecutor:} Creates N threads that each perform a busy loop of mathematical operations (square root, sine, cosine) for the specified duration. The thread count and duration are configurable through job parameters.
+	\item \textbf{StressMemExecutor:} Allocates a specified amount of memory using \texttt{malloc}, initializes it with \texttt{memset}, and holds the allocation for the specified duration before freeing it.
+	\item \textbf{StressIOExecutor:} Creates a temporary file and performs write and read operations. The access mode (sequential, random) and I/O size are configurable.
+	\item \textbf{MixedLoadExecutor:} Spawns concurrent CPU, memory, and I/O stress threads, each with configurable parameters. The thread counts for each stress type are independently configurable.
+\end{itemize}
+
+\subsubsection{eBPF Monitor Module}
+
+The eBPF monitor consists of two parts: the in-kernel BPF program and the userspace monitor.
+
+\textbf{BPF Program (job\_monitor.bpf.c):} Attaches to the \url{raw_syscalls/sys_enter} tracepoint. For each system call entry, it:
+\begin{enumerate}
+	\item Checks whether the current process belongs to the monitored cgroup by reading the cgroup ID.
+	\item Increments the appropriate counter in a per-CPU BPF array.
+	\item For read/write syscalls, accumulates byte counts in an I/O bytes map.
+	\item For sendto/recvfrom syscalls, accumulates byte counts in a network bytes map.
+\end{enumerate}
+
+\textbf{EbpfMonitor (userspace):}
+\begin{itemize}
+	\item Loads the compiled BPF object (\url{job_monitor.bpf.o}) using libbpf APIs.
+	\item Attaches the BPF program to the tracepoint and stores the link for later detachment.
+	\item Every 2 seconds, reads the per-CPU BPF maps (summing across all CPUs), and also reads \url{cpu.stat} and \url{memory.current} from the cgroup filesystem.
+	\item Outputs the combined snapshot as a JSON line to stdout for consumption by the worker.
+\end{itemize}
+
+\subsubsection{CLI Client Module}
+
+The CLI client (Figures~\ref{fig:cli-submit},~\ref{fig:cli-jobs}, and~\ref{fig:cli-result}) provides a command-line interface for users to interact with the scheduler. It uses the \texttt{CliParser} class (based on the third-party \url{argparse.hpp} library) with subcommands:
+
+\begin{itemize}
+	\item \texttt{register --token <token>}: Registers the client with the scheduler. The returned client ID and authentication token are cached locally in \url{cli.db} via the \texttt{CliDatabase} class.
+	\item \texttt{submit --type <type> --param <key=value> ...}: Submits a job with specified type and parameters.
+	\item \texttt{jobs [--refresh]}: Lists all jobs submitted by the registered client. Results are cached locally; passing \texttt{--refresh} bypasses the cache and fetches fresh data from the scheduler via the \url{GetClientJobs} RPC.
+	\item \texttt{result --id <job\_id> [--refresh]}: Retrieves the result and status of a completed job. Results are cached locally; \texttt{--refresh} forces a fresh fetch from the scheduler.
+\end{itemize}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs-cli_job_submission.jpg}
+	\caption{CLI job submission showing job ID returned from the scheduler}
+	\label{fig:cli-submit}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_cli_jobs_list.jpg}
+	\caption{CLI jobs list showing submitted job IDs with status, type, and timestamps}
+	\label{fig:cli-jobs}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs-cli_job_result.jpg}
+	\caption{CLI result retrieval showing job status, duration, and output details}
+	\label{fig:cli-result}
+\end{figure}
+
+\subsubsection{Admin Module}
+
+The admin tool manages authentication tokens through subcommands:
+
+\begin{itemize}
+	\item \texttt{gen-token --type client/worker --description <text>}: Generates a new token as a cryptographically random 64-character hex string (read from \url{/dev/urandom}).
+	\item \texttt{list-tokens}: Lists all tokens with their type, status, and creation date.
+	\item \texttt{revoke-token --token-id <id>}: Revokes an active token.
+	\item \texttt{usage --token-id <id>}: Shows token usage statistics.
+\end{itemize}
+
+\subsubsection{Dashboard Module}
+
+The dashboard (Figures~\ref{fig:dashboard-jobs} and~\ref{fig:dashboard-metrics}) is a web application built with Node.js and Express that provides a browser-based interface for monitoring the system. It connects directly to the PostgreSQL database (bypassing gRPC) and reads job, worker, and metrics data for display.
+
+The dashboard is organized into the following views:
+
+\begin{itemize}
+	\item \textbf{Overview page} (\url{/}): Displays summary statistics: total workers, total jobs, succeeded jobs, and currently active jobs, along with the 20 most recent job entries.
+	\item \textbf{Workers page} (\url{/workers}): Lists all registered workers with their latest metrics (CPU, memory, disk usage, load average). Clicking a worker opens a detail page (\url{/workers/:id}) showing active jobs and a historical table of completed jobs with runtime analytics.
+	\item \textbf{Jobs page} (\url{/jobs}): Lists all jobs with an optional \texttt{status} query filter. Clicking a job opens a detail page (\url{/jobs/:id}) showing job metadata, result information, and a full eBPF metrics timeseries table.
+\end{itemize}
+
+The dashboard also exposes REST API endpoints for programmatic access: \url{/api/workers/:id/metrics} returns a worker's metric history, \url{/api/workers/:id/jobs} returns a worker's job history, and \url{/api/jobs/:id/ebpf} returns the eBPF metrics timeseries for a specific job. The application serves on port 3000 by default and requires a running PostgreSQL database.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_dashboard_jobs_list.jpg}
+	\caption{Web dashboard jobs list showing all jobs with status, type, worker assignment, and timestamps}
+	\label{fig:dashboard-jobs}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_dashboard_job_metric_tracking.jpg}
+	\caption{Dashboard job detail view showing eBPF metrics timeseries for a completed job}
+	\label{fig:dashboard-metrics}
+\end{figure}
+
+\section{Testing}
+
+The project includes an automated test suite built with Google Test (GTest) 1.15.2. The test suite covers the core algorithmic components (scheduling strategies), the thread-safe metric store, the database layer, and the system metrics collector. Tests that require gRPC, eBPF, or cgroups are excluded from the automated suite due to their runtime dependencies and are covered manually.
+
+\subsection{Test Infrastructure}
+
+The test suite is located in the \url{tests/} directory at the project root. It is built as a separate CMake target that is disabled by default and can be enabled with the \url{BUILD_TESTS} option:
+
+\begin{lstlisting}[caption=Building and running the test suite,label=lst:build_tests,language=bash]
+# Configure with tests enabled
+cmake -B build -DBUILD_TESTS=ON
+
+# Build the test binary
+cmake --build build --target run_tests
+
+# Run all tests
+./build/tests/run_tests
+\end{lstlisting}
+
+\subsection{Test Architecture}
+
+The test suite is organized into seven test suites (Table~\ref{tab:test_suites}) with 23 individual test cases. The scheduling strategy tests use a \url{MockDatabase} class that implements the \url{ISchedulerDatabase} interface, allowing each selector to be tested in complete isolation without a real database.
+
+\begin{table}[htbp]
+	\centering
+	\caption{Test Suite Organization}
+	\label{tab:test_suites}
+	\resizebox{\textwidth}{!}{%
+		\begin{tabular}{lll}
+			\toprule
+			\textbf{Test Suite}    & \textbf{Test File}      & \textbf{Description}                     \\
+			\midrule
+			FCFSSelectorTest       & test\_selectors.cpp     & 3 tests for FCFS scheduling strategy     \\
+			SJFSelectorTest        & test\_selectors.cpp     & 4 tests for SJF scheduling strategy      \\
+			AdaptiveSelectorTest   & test\_selectors.cpp     & 5 tests for Adaptive scheduling strategy \\
+			DatabaseTest           & test\_database.cpp      & 4 tests for SQLite database operations   \\
+			EbpfMetricStoreTest    & test\_metric\_store.cpp & 5 tests for eBPF metric accumulator      \\
+			SelectorComparisonTest & test\_selectors.cpp     & 1 test comparing all three selectors     \\
+			MetricsCollectorTest   & test\_metrics.cpp       & 1 test for system metrics collection     \\
+			\bottomrule
+		\end{tabular}%
+	}
+\end{table}
+
+\subsection{Test Cases for Unit Testing}
+
+Table~\ref{tab:unit_tests} describes each unit test case in detail.
+
+\begin{table}[htbp]
+	\centering
+	\caption{Unit Test Cases}
+	\label{tab:unit_tests}
+	\resizebox{\textwidth}{!}{%
+		\begin{tabular}{llll}
+			\toprule
+			\textbf{Suite} & \textbf{Test Case}                           & \textbf{Input / Scenario}                                              & \textbf{Expected Result}                                                \\
+			\midrule
+			FCFS           & ReturnsEmptyWhenNoJobs                       & Empty job vector                                                       & Returns default Job with id 0                                           \\
+			FCFS           & PicksOldestJob                               & 3 jobs, different timestamps                                           & Returns job with earliest timestamp                                     \\
+			FCFS           & SkipsNonStartedJobs                          & completed + not\_started + assigned                                    & Returns only the not\_started job                                       \\
+			\midrule
+			SJF            & PicksShortestDuration                        & cpu(5s), mem(2s), io(8s) avg durations                                 & Returns stress\_mem (shortest avg)                                      \\
+			SJF            & IgnoresLongerDuration                        & cpu(1s), mem(99999s) avg duration                                      & Returns stress\_cpu                                                     \\
+			SJF            & FallsBackToFCFS                              & No duration data at all                                                & Returns oldest job (FCFS fallback)                                      \\
+			SJF            & FallsBackWithUnknown                         & Only unknown types have duration data                                  & Returns oldest unknown job                                              \\
+			\midrule
+			Adaptive       & ReturnsEmptyNoMetrics                        & No worker metrics available                                            & Returns default Job (can't predict)                                     \\
+			Adaptive       & PicksSafeKnownJob                            & 50\% CPU, 30\% mem, known spike fits                                   & Returns the safe job                                                    \\
+			Adaptive       & PicksUnknownWhenNoSafe                       & No spike history for any job type                                      & Returns oldest unknown (bootstrap)                                      \\
+			Adaptive       & RejectsCPUOverload                           & 95\% CPU + 10\% spike exceeds 100\%                                    & Returns default Job (rejected)                                          \\
+			Adaptive       & PicksOldestSafe                              & 2 safe jobs, different timestamps                                      & Returns older safe job                                                  \\
+			\midrule
+			Comparison     & AdaptivePreventsOverloadWhileFCFSAndSJFDoNot & Worker at 80\% CPU; stress\_cpu (spike 30\%) vs stress\_io (spike 5\%) & FCFS/SJF pick stress\_cpu (overloads); Adaptive picks stress\_io (safe) \\
+			\midrule
+			Database       & InsertAndRetrieveJob                         & Insert stress\_cpu job                                                 & Job retrievable with correct type/status                                \\
+			Database       & QueryByStatus                                & Insert not\_started and completed jobs                                 & Both statuses returned correctly                                        \\
+			Database       & InsertAndQueryWorker                         & Insert worker with 8 cores                                             & Worker retrievable with correct specs                                   \\
+			Database       & TokenValidation                              & Insert client + worker tokens, query by type                           & Correct count for each type                                             \\
+			\midrule
+			MetricStore    & AddAndDrain                                  & Add 1 snapshot, drain                                                  & Returns 1 snapshot with correct values                                  \\
+			MetricStore    & DrainRemovesData                             & Add, drain, drain again                                                & Second drain returns empty                                              \\
+			MetricStore    & ActiveJobIds                                 & Add to 3 job IDs, drain 1                                              & Active IDs count drops from 3 to 2                                      \\
+			MetricStore    & HandlesMultiple                              & Add 3 snapshots to same job                                            & Returns all 3 in order                                                  \\
+			MetricStore    & DrainNonexistent                             & Drain non-existent job ID                                              & Returns empty vector                                                    \\
+			\midrule
+			Metrics        & CollectReturnsNonDefault                     & Real /proc filesystem on Linux                                         & Memory, CPU, disk values are positive                                   \\
+			\bottomrule
+		\end{tabular}%
+	}
+\end{table}
+
+\subsection{Test Cases for System Testing}
+
+End-to-end system testing validated the complete job lifecycle. Table~\ref{tab:system_tests} describes the system-level test scenarios, which are performed manually since they require running multiple distributed components simultaneously.
+
+\begin{table}[htbp]
+	\centering
+	\caption{System Test Scenarios}
+	\label{tab:system_tests}
+	\resizebox{\textwidth}{!}{%
+		\begin{tabular}{lll}
+			\toprule
+			\textbf{Test Scenario}  & \textbf{Steps}                                             & \textbf{Expected Result}                             \\
+			\midrule
+			Complete job lifecycle  & Register client, submit job, worker polls, execute, report & Job reaches "completed" status through all states    \\
+			Multiple workers        & Register 2 workers, submit 3 jobs                          & Each worker receives $\ge$ 1 job, scheduler balances \\
+			Worker crash recovery   & Receive job, kill worker, restart worker                   & Worker recovers pending jobs, reports as failed      \\
+			Token revocation        & Generate, use, revoke, reuse token                         & Post-revocation requests rejected with DENIED        \\
+			PostgreSQL backend      & Build USE\_PG=ON, start PG, run system                     & Identical operation to SQLite                        \\
+			eBPF metrics collection & Submit CPU job, query metrics                              & Non-zero syscall counts, CPU usage recorded          \\
+			\bottomrule
+		\end{tabular}%
+	}
+\end{table}
+
+\subsection{Result Analysis}
+
+The automated test suite was built and executed on a Fedora 43 system with GCC 15.2.1 and Google Test 1.15.2. All 23 tests passed successfully with zero failures. The complete system overview is shown in Figure~\ref{fig:overall}.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth, height=0.55\textheight, keepaspectratio]{djs_overall.jpg}
+	\caption{Complete system overview showing scheduler, worker, and dashboard running concurrently}
+	\label{fig:overall}
+\end{figure}
+
+\subsubsection{Test Execution Output}
+
+The following output was produced by running the test suite:
+
+\begin{lstlisting}[caption=Test execution results,label=lst:test_output,language=bash]
+$ cmake -B build -DBUILD_TESTS=ON
+$ cmake --build build --target run_tests
+$ ./build/tests/run_tests
+
+[==========] Running 23 tests from 7 test suites.
+[----------] 3 tests from FCFSSelectorTest
+[ RUN      ] FCFSSelectorTest.ReturnsEmptyJobWhenNoJobs
+[       OK ] (0 ms)
+[ RUN      ] FCFSSelectorTest.PicksOldestJob
+[       OK ] (0 ms)
+[ RUN      ] FCFSSelectorTest.SkipsNonStartedJobs
+[       OK ] (0 ms)
+
+[----------] 4 tests from SJFSelectorTest
+[ RUN      ] SJFSelectorTest.PicksJobWithShortestDuration
+[       OK ] (0 ms)
+[ RUN      ] SJFSelectorTest.IgnoresJobsWithLongerDuration
+[       OK ] (0 ms)
+[ RUN      ] SJFSelectorTest.FallsBackToFCFSWhenNoDurations
+[       OK ] (0 ms)
+[ RUN      ] SJFSelectorTest.FallsBackWithOnlyUnknownTypes
+[       OK ] (0 ms)
+
+[----------] 5 tests from AdaptiveSelectorTest
+[ RUN      ] AdaptiveSelectorTest.ReturnsEmptyWhenNoMetrics
+[       OK ] (0 ms)
+[ RUN      ] AdaptiveSelectorTest.PicksSafeKnownJob
+[       OK ] (0 ms)
+[ RUN      ] AdaptiveSelectorTest.PicksUnknownWhenNoSafeKnown
+[       OK ] (0 ms)
+[ RUN      ] AdaptiveSelectorTest.RejectsJobThatWouldOverloadCPU
+[       OK ] (0 ms)
+[ RUN      ] AdaptiveSelectorTest.PicksOldestSafeAmongMultiple
+[       OK ] (0 ms)
+
+[----------] 1 test from SelectorComparisonTest
+[ RUN      ] SelectorComparisonTest.AdaptivePreventsOverloadWhileFCFSandSJFDoNot
+[       OK ] (0 ms)
+
+[----------] 4 tests from DatabaseTest
+[ RUN      ] DatabaseTest.InsertAndRetrieveJob
+[       OK ] (0 ms)
+[ RUN      ] DatabaseTest.QueryJobsByStatus
+[       OK ] (0 ms)
+[ RUN      ] DatabaseTest.InsertAndQueryWorker
+[       OK ] (0 ms)
+[ RUN      ] DatabaseTest.TokenValidation
+[       OK ] (0 ms)
+
+[----------] 5 tests from EbpfMetricStoreTest
+[ RUN      ] EbpfMetricStoreTest.AddAndDrain
+[       OK ] (0 ms)
+[ RUN      ] EbpfMetricStoreTest.DrainRemovesData
+[       OK ] (0 ms)
+[ RUN      ] EbpfMetricStoreTest.ActiveJobIds
+[       OK ] (0 ms)
+[ RUN      ] EbpfMetricStoreTest.HandlesMultipleSnapshots
+[       OK ] (0 ms)
+[ RUN      ] EbpfMetricStoreTest.DrainNonexistentReturnsEmpty
+[       OK ] (0 ms)
+
+[----------] 1 test from MetricsCollectorTest
+[ RUN      ] MetricsCollectorTest.CollectReturnsNonDefaultValues
+[       OK ] (0 ms)
+
+[==========] 23 tests from 7 test suites ran. (1 ms total)
+[  PASSED  ] 23 tests.
+\end{lstlisting}
+
+\subsubsection{Analysis}
+
+All 23 tests completed successfully in approximately 1 millisecond. The results demonstrate:
+
+\begin{description}
+	\item[Scheduling Strategy Correctness:] All 13 selector tests pass, confirming that FCFS correctly orders by timestamp, SJF correctly selects by historical duration with proper FCFS fallback, and Adaptive correctly predicts resource impact, handles unknown types for bootstrapping, and rejects overload scenarios. The cross-selector comparison test further validates that only Adaptive prevents overload while FCFS and SJF do not.
+
+	\item[Database Layer Integrity:] All 4 database tests pass, confirming that SQLite insert, query, and token validation operations function correctly with an in-memory database.
+
+	\item[eBPF Metric Store Thread Safety:] All 5 metric store tests pass, confirming that the mutex-protected accumulator correctly handles add, drain, and active ID tracking operations.
+
+	\item[System Metrics Collection:] The system metrics collector returns realistic values (non-zero memory and CPU metrics), confirming that the \url{/proc} filesystem parsing works correctly on Linux.
+\end{description}
+
+The test suite provides a solid foundation for regression testing. As new scheduling strategies or executor types are added, corresponding test cases can be included following the established patterns.

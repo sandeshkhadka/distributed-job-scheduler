@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>djs-admin - Overview</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <h1 class="logo">djs</h1>
+    <nav>
+      <a href="/" class="active">Overview</a>
+      <a href="/workers">Workers</a>
+      <a href="/jobs">Jobs</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <h2>Overview</h2>
+    <div class="cards">
+      <div class="card"><span class="num"><%= total_workers %></span><span class="label">Workers</span></div>
+      <div class="card"><span class="num"><%= total_jobs %></span><span class="label">Total Jobs</span></div>
+      <div class="card"><span class="num"><%= succeeded %></span><span class="label">Succeeded</span></div>
+      <div class="card"><span class="num"><%= active_jobs %></span><span class="label">Active Jobs</span></div>
+    </div>
+
+    <h3>Recent Jobs</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Worker</th><th>Result</th><th>Created</th></tr></thead>
+      <tbody>
+        <% recent.forEach(j => { %>
+        <tr>
+          <td><a href="/jobs/<%= j.id %>"><%= j.id %></a></td>
+          <td><%= j.job_type %></td>
+          <td><span class="badge <%= j.status %>"><%= j.status %></span></td>
+          <td><%= j.worker_name || '-' %></td>
+          <td><%= j.success === null ? '-' : j.success ? '✓' : '✗' %></td>
+          <td><%= j.created_at %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>
